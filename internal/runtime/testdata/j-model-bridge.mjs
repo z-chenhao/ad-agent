@@ -1,0 +1,80 @@
+import { createInterface } from "node:readline";
+
+const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
+const send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
+let state = { version: 1, assistants: [] };
+
+input.on("line", (line) => {
+  const frame = JSON.parse(line);
+  if (frame.type === "start") {
+    state = frame.provider_state ?? state;
+    send({ type: "ready" });
+    return;
+  }
+  if (frame.type !== "complete") process.exit(2);
+  const messages = frame.request.messages;
+  const last = messages.at(-1);
+  if (last?.role === "user" && last.content?.[0]?.text === "hang") return;
+  const hasAssistant = messages.some((message) => message.role === "assistant");
+  if (!hasAssistant && (frame.request.tools?.length ?? 0) > 0) {
+    const message = {
+      role: "assistant",
+      content: [
+        {
+          type: "tool_call",
+          toolCall: {
+            id: "call-1",
+            name: "read_data",
+            arguments: { key: "value" },
+          },
+        },
+      ],
+    };
+    state.assistants.push({ fake: "tool" });
+    send({
+      type: "done",
+      id: frame.id,
+      response: {
+        message,
+        provider: "openai-codex",
+        model: "gpt-5.6-luna",
+        stopReason: "tool_calls",
+        usage: {
+          inputTokens: 2,
+          outputTokens: 3,
+          totalTokens: 5,
+          cachedInputTokens: 1,
+        },
+      },
+      provider_state: state,
+    });
+    return;
+  }
+  send({
+    type: "delta",
+    id: frame.id,
+    delta: { type: "text", index: 0, delta: "done" },
+  });
+  const message = {
+    role: "assistant",
+    content: [{ type: "text", text: "done" }],
+  };
+  state.assistants.push({ fake: "text" });
+  send({
+    type: "done",
+    id: frame.id,
+    response: {
+      message,
+      provider: "openai-codex",
+      model: "gpt-5.6-luna",
+      stopReason: "stop",
+      usage: {
+        inputTokens: 4,
+        outputTokens: 1,
+        totalTokens: 5,
+        cachedInputTokens: 2,
+      },
+    },
+    provider_state: state,
+  });
+});

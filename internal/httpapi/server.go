@@ -132,6 +132,11 @@ func (s *Server) Handler() http.Handler {
 			CSRF string `json:"csrf"`
 		}{auth.CSRF})
 	}))
+	mux.HandleFunc("GET /api/v1/config", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		writeJSON(w, 200, struct {
+			Runtime string `json:"runtime"`
+		}{s.App.Runtime})
+	}))
 	mux.HandleFunc("POST /api/v1/logout", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		c, _ := r.Cookie("ad_session")
 		s.mu.Lock()

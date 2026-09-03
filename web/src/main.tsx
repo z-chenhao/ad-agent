@@ -12,6 +12,7 @@ import type {
   Session,
   Event,
   Metrics,
+  RuntimeConfig,
 } from "./types";
 import "./style.css";
 
@@ -363,6 +364,7 @@ function Login({ onReady }: { onReady: () => void }) {
 function Workspace() {
   const [page, setPage] = useState("overview");
   const [account, setAccount] = useState<Account>();
+  const [runtime, setRuntime] = useState<RuntimeConfig["runtime"]>("custom");
   const [error, setError] = useState("");
   const [overview, setOverview] = useState<{
     report: Report;
@@ -411,6 +413,9 @@ function Workspace() {
       ),
     );
   useEffect(() => {
+    void api<RuntimeConfig>("/config")
+      .then((config) => setRuntime(config.runtime))
+      .catch((e) => setError(String(e)));
     void api<Account>("/advertisers/current")
       .then(async (a) => {
         setAccount(a);
@@ -534,7 +539,9 @@ function Workspace() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <span className="connection-dot" /> Pi + Luna
+          <span className="connection-dot" />{" "}
+          {runtime === "j" ? "J-agent" : runtime === "pi" ? "Pi" : "Agent"} +
+          Luna
           <small>ChatGPT OAuth · 本地运行</small>
           <p>
             建议可以自动生成，
@@ -549,7 +556,10 @@ function Workspace() {
             工作台 <span>/</span> {title[page]}
           </div>
           <div className="account-mini">
-            <span className="badge">FIXTURE · 虚构数据</span>
+            <span className="badge">
+              {(account?.source.backend ?? "LOADING").toUpperCase()} ·{" "}
+              {account?.source.backend === "fixture" ? "虚构数据" : "只读数据"}
+            </span>
             <span className="avatar">本</span>
           </div>
         </header>

@@ -1,6 +1,6 @@
 # Ad Agent 初版技术方案（Go + React + TikTok MAPI）
 
-状态：实施基线 v0.5，2026-09-04。CLI/React fixture 闭环和 MAPI HTTP adapter 已实现；真实授权/J 接入仍在实施。
+状态：实现基线 v0.6，2026-09-04。Pi/J CLI、React fixture 闭环和 MAPI HTTP adapter 已实现；真实 TikTok 授权仍待应用获批。
 
 TikTok 契约研究基线：官方 Business API SDK commit
 [`f809c39`](https://github.com/tiktok/tiktok-business-api-sdk/tree/f809c396520df2d7b201a9ccc5378d822b728ed3)
@@ -20,16 +20,17 @@ Harness 由以下相互独立的机制组成：
 5. 展示由 presentation tools 描述，服务端用可信记录补全，React 只渲染协议。
 6. 一个类型化 lifecycle event stream，同时供 SSE、日志和指标 sink 消费。
 
-首版不再自写完整 agent loop，而使用 Pi Coding Agent SDK 作为 runtime；Go host
-继续拥有 MAPI、轮次预算、权限、审批、持久化与 browser transport。一个极薄的
-TypeScript sidecar 将 Pi session/custom tools 映射到 Go executor。模型路径固定为
-`openai-codex/gpt-5.6-luna`，认证采用单用户 ChatGPT OAuth。
+首版提供两个实际工作的 runtime。Pi Coding Agent SDK 在极薄 TypeScript sidecar 中
+拥有 session/model/tool loop；J-agent 在 Go 进程中拥有另一套 model/tool loop，其
+model-only TypeScript bridge 只负责复用 Pi 的 ChatGPT OAuth/Responses transport。
+Go host 始终拥有 MAPI、轮次预算、权限、审批、持久化与 browser transport。模型路径
+固定为 `openai-codex/gpt-5.6-luna`，认证采用单用户 ChatGPT OAuth。
 广告数据接入依赖 repo-private 的 `ads.AdBackend`；`tiktokmapi.Backend` 与
 `fixture.Backend` 分别实现真实协议接入与虚构数据。runtime 和 backend 独立替换。
 详细职责见 [AdBackend 合同](ad-backend-contract.md)，环境和回调状态见
 [开发准备清单](development-readiness.md)。
-不建设通用 agent framework、任意插件系统或全量 MAPI 写能力。按用户明确要求，
-Pi/CLI/Web 完成并首次推送后，继续实现真实 J-agent runtime；两者复用同一业务边界。
+不建设通用 agent framework、任意插件系统或全量 MAPI 写能力。J runtime 已在
+Pi/CLI/Web 完成并首次推送后接入，两者复用同一业务边界。
 
 最重要的安全差异是：**模型没有 apply-live-state 工具**。模型可以读取、分析、
 生成 staged change；只有 CLI 的独立审批命令或 React 中经过鉴权的审批按钮能触发已授权 writer。
@@ -44,13 +45,13 @@ Pi/CLI/Web 完成并首次推送后，继续实现真实 J-agent runtime；两�
 - 变更：先支持单对象预算变更与启停；先预览，再由人审批后写入 TikTok。
 - 页面：对话流、可验证的结构化卡片、层级浏览、变更审批和结果状态。
 - 技术：产品服务端 Go；页面 React + TypeScript；数据源 TikTok Marketing API。
-  唯一例外是嵌入 Pi SDK 所需的极薄 TypeScript runtime sidecar，不承载领域逻辑。
+  TypeScript runtime bridges 只承载 Pi SDK/session 或 provider transport，不承载领域逻辑。
 
 ### 2.2 下游契约
 
 - TikTok Business API v1.3：官方 SDK 当前列出了 OAuth advertiser 授权查询、
   campaign/ad group/ad 的 get/create/update/status-update，以及 integrated reporting。
-- 模型 API：首个部署使用 Pi 的 `openai-codex-responses` provider、ChatGPT OAuth 和
+- 模型 API：两个 runtime 都使用 Pi 的 `openai-codex-responses` provider transport、ChatGPT OAuth 和
   `gpt-5.6-luna`，默认 `reasoning.effort=medium`，再用 eval 比较 `low`。模型与认证
   只存在于 runtime sidecar；Go 领域层不依赖 provider 或模型名。
 - Browser：同源 HTTP API + SSE 事件协议；浏览器永远不持有 TikTok token。
@@ -74,7 +75,7 @@ endpoint/field 组合。fixture 可先提供同名业务工具，但必须标记
 ## 3. Agent harness 的职责与不变量
 
 本项目把广告业务约束与模型循环分开。前者由 Go host 统一执行，后者通过私有
-runtime 接口适配。当前真实消费者是 CLI，下一步是复用相同 host 的 React 页面。
+runtime 接口适配。当前真实消费者是 CLI 和 React/HTTP host。
 
 | 层         | 本项目职责                                                     | 开放范围                   |
 | ---------- | -------------------------------------------------------------- | -------------------------- |
@@ -156,17 +157,19 @@ Pi 的 `openai` provider 使用官方 `https://api.openai.com/v1` Responses API 
 探针暂用固定版本内部 bootstrap；正式 sidecar 必须显式拥有 HTTP 初始化，并通过同一
 round-trip 验收，不把该内部函数当稳定公共 SDK API。
 
-J-agent 是 Go 原生的最小 model/tool loop，已有 ordered content、tool-call/result
-correlation、同步 lifecycle events、history restore 和 context cancellation；J-subagents
-已经证明 child agent 可通过普通 Tool 组合。当前缺口也很明确：
+J-agent 是 Go 原生的最小 model/tool loop，提供 ordered content、tool-call/result correlation、
+同步 lifecycle events、history restore 和 context cancellation。接入时保留了这些职责：
 
-- J 的 OpenAI provider 只有 Chat Completions/Azure Chat Completions，没有 Responses；
-- J-agent 不限制 tool rounds，必须由 host 的 context/budget/backstop policy 包住；
-- J 的 provider-neutral history 不保存 Responses 的 raw output items、encrypted reasoning
-  或 `previous_response_id` continuation；
-- J-subagents 的通用返回不等于 `AnalysisResult` schema，需要 Ad host 包装校验。
+- J-agent 真正执行 model → tool → model 循环；不是对完整 Pi AgentSession 的外层包装；
+- host adapter 在 J model 外增加 tool round/backstop 和 64 次总调用限制；
+- model-only bridge 调用 Pi `ModelRuntime.streamSimple`，只解决 ChatGPT OAuth、Codex
+  Responses transport 与 provider-native state；它没有业务工具 executor；
+- J 的 provider-neutral history 与 provider-native assistant state 一起写入私有 0600
+  checkpoint。恢复时逐条规范化比对，失配即失败，不把 reasoning/signature 暴露到 SSE；
+- analysis child 使用同一个所选 runtime 和 Ad host 的严格 `AnalysisResult` 校验，不依赖
+  J-subagents 的通用返回格式。
 
-### 4.2 选择
+### 4.2 首个 runtime 选择
 
 单用户本地 v0.2 选择 **Pi Coding Agent SDK + ChatGPT OAuth +
 `openai-codex/gpt-5.6-luna`**：
@@ -178,7 +181,7 @@ correlation、同步 lifecycle events、history restore 和 context cancellation
    guardrails、change ledger、approval/apply/reconcile、HTTP/SSE 都在 Go。
 3. TypeScript 只保留在 `runtime/pi-bridge`，通过私有双向 NDJSON stdio 协议与 Go 通信。
    sidecar 不持有 MAPI token，不直接调用 TikTok，也不拥有 approval 事实。
-4. Pi session 是 model transcript/Responses continuation 的唯一来源；Go DB 是用户可见
+4. Pi runtime 中 Pi session 是 model transcript/Responses continuation 的唯一来源；Go DB 是用户可见
    transcript、domain state 和 audit 的唯一来源。两者各有明确 owner，不做双向通用同步。
 5. OAuth 是单用户本地部署的显式产品假设。credential 存在进程外、权限受限的用户数据
    目录，由用户一次性登录；不得进入 repo、Go DB、prompt、tool result、SSE 或日志。
@@ -192,38 +195,39 @@ sidecar 必须使用 SDK full-control 配置：关闭 bash/edit/write、默认 c
 discovery、自动 skills/prompts 和任意 extensions；显式加载 `AGENT.md`，只注册桥接到 Go
 executor 的 Ad tools。不能直接执行 `pi --mode rpc` 的默认 coding-agent tool surface。
 
-### 4.3 J-agent 的实施顺序
+### 4.3 J-agent 的实现
 
-J-agent 接入是已确认交付项，不再只是候选方案。在 Pi CLI/Web 验证、项目 review、
-首次 GitHub 推送后实施真实 J-agent model/tool loop。模型保持 ChatGPT OAuth +
-gpt-5.6-luna；不能把调用完整 Pi session 的包装器称为 J runtime。
+J-agent 按交付顺序在首次 GitHub 推送后接入，固定模块 commit `6ddcaee`。没有修改用户
+本地 J 仓库及其未提交迁移。Go `runtime.J` 注入 J-agent 的 Model 和 Tool：J-agent 管理
+provider-neutral history、循环与事件；每次 run 启动一个长寿命 model-only bridge，后者
+使用现有 ChatGPT OAuth 调用 gpt-5.6-luna。
 
-需要验证 provider-native Responses continuation、token refresh、工具调用配对、
-取消、轮次上限及恢复。业务工具、schema、分析隔离、审批和事件继续复用 Go host。
-不修改用户 J 仓库中的无关迁移；优先使用明确版本的独立模块。Claude SDK 仍仅保留替换边界。
+bridge 私下保留带 reasoning signature、tool thought signature 和 response ID 的原生
+assistant messages。每次 Complete 都把 J history 与这些原生消息逐条规范化比对，再交给
+Responses provider；checkpoint 同时保存两种状态，但只保存于 runtime 私有目录，不进入
+Go 用户会话、SSE 或日志。空 reasoning block 因 Go `omitempty` 省略文本的边界已有回归测试。
+
+已验证真实读取、同 session 恢复、工具配对、取消、轮次上限、analysis child、草案预览和
+React E2E。业务工具、schema、分析隔离、审批和事件全部复用 Go host。Claude SDK 仍仅保留
+替换边界；没有实现或声称 Claude adapter 可用。
 
 ### 4.4 可替换 runtime seam
 
-“未来可换 Pi / Claude SDK / J-agent”是明确需求，因此 Go host 现在定义一个 repo-private、
+“Pi/J 可切换、未来可换 Claude SDK”是明确需求，因此 Go host 现在定义一个 repo-private、
 experimental 的窄接口；它不是想象出来的 universal agent protocol：
 
 ```go
-type AgentRuntime interface {
-    Open(ctx context.Context, spec SessionSpec) (AgentSession, error)
+type Runtime interface {
+    Run(context.Context, Request, Hooks) (Result, error)
 }
 
-type AgentSession interface {
-    Run(ctx context.Context, in TurnInput, hooks TurnHooks) (TurnResult, error)
-    Close(ctx context.Context) error
-}
-
-type TurnHooks struct {
-    ExecuteTool func(context.Context, ToolCall) ToolResult
-    Emit        func(RuntimeEvent) error
+type Hooks struct {
+    Execute func(context.Context, Call) ToolResult
+    Emit    func(Event)
 }
 ```
 
-`SessionSpec` 只包含静态 contract、fenced dynamic context、ordered tool schemas、预算和
+`Request` 只包含静态 contract、fenced dynamic context、ordered tool schemas、预算和
 一个 opaque runtime checkpoint reference；不包含 TikTok credential 或 approval mark。
 `RuntimeEvent` 只规范化 host 真正消费的 text/tool/progress/usage/terminal facts。provider
 raw events、reasoning、OAuth token、Pi session JSONL 不成为公共字段。
@@ -236,14 +240,16 @@ raw events、reasoning、OAuth token、Pi session JSONL 不成为公共字段。
 - runtime checkpoint 只能在 settled turn 提交，永远不能证明某个 change 已获批或已应用；
 - analysis 的只读隔离与 schema-valid result 是 host contract，不依赖某个 SDK 的“子代理”名词。
 
-适配方式：Pi 和未来 Claude SDK 可使用 sidecar transport；J-agent 可在 Go 进程内直接实现
-同一接口。先实现 Pi adapter，随后落实 J adapter；在实际验证第二个实现前，不稳定更多字段。
+适配方式：Pi 使用 full-agent sidecar；J-agent 在 Go 进程内实现同一接口并连接 model-only
+sidecar；未来 Claude SDK 可以实现新的 adapter。两个实现已经验证，但该 seam 仍保持
+repo-private experimental，不为尚不存在的第三方消费者增加字段。
 
 切换规则刻意保守：只允许在 completed/failed/cancelled 的 turn 边界切换。Go 保留
 normalized user-visible transcript、一个受限 summary、provenance/change/audit；新 runtime
 从这些可移植事实开始新 session。Pi/Codex 的 reasoning items、Claude session state 或 J
 内部 history 不跨 runtime 搬运。因此“可替换”不等于对话质量与缓存命中无损，也不支持
-mid-turn failover。
+mid-turn failover。CLI 因此要求切换 `--runtime` 时新建 session，不解释另一 runtime 的
+opaque checkpoint。
 
 ## 5. 系统边界
 
@@ -253,9 +259,14 @@ flowchart LR
   W -->|POST turn, SSE response| H[Go HTTP host]
   W -->|Approve exact change| H
   H --> S[(SQLite WAL)]
-  H <-->|private NDJSON| R[Pi runtime sidecar]
-  R --> M[Codex Responses / Luna]
-  R -->|custom tool call| X[Go single tool executor]
+  H --> R{Selected runtime}
+  R <-->|private NDJSON| P[Pi full-agent sidecar]
+  R --> J[J-agent loop in Go]
+  J <-->|private NDJSON| JM[J model-only bridge]
+  P --> M[Codex Responses / Luna]
+  JM --> M
+  P -->|custom tool call| X[Go single tool executor]
+  J -->|J Tool.Call| X
   X --> G[Provenance and guardrails]
   G --> A[AdBackend read contract]
   A --> B[TikTok MAPI implementation]
@@ -273,8 +284,9 @@ flowchart LR
 边界原则：
 
 - `agent` 决定何时读、如何解释、提出什么 draft。
-- `pi-bridge` 只拥有模型循环、模型 transcript、Codex OAuth/Responses continuation
-  和 analysis child；没有业务写权限。
+- `pi-bridge` 只拥有 Pi 模型循环、模型 transcript 与 Codex OAuth/Responses continuation；
+  `runtime.J` 拥有 J-agent loop，`j-model-bridge` 只拥有 provider-native model state；
+  两条路径都没有业务写权限。
 - `ads` 领域服务决定哪些改变可表达、可比较、可审批。
 - `ads.AdBackend` 第一阶段只读，不拥有草案、审批、报告 handle 或模型 transcript。
 - `tiktokmapi` 只翻译协议、认证、分页、错误和远端响应，不包含 agent 策略。
@@ -288,46 +300,33 @@ flowchart LR
 ├── AGENT.md                         # 静态 agent contract
 ├── cmd/ad-agent/main.go             # composition root
 ├── internal/
-│   ├── agenthost/
-│   │   ├── runtime.go               # Pi process/session、预算、backstop
-│   │   ├── bridge.go                # 双向 NDJSON + request correlation
-│   │   ├── prompt.go                # static/dynamic block assembly + fencing
-│   │   ├── tools.go                 # 固定顺序的 JSON schemas
-│   │   ├── executor.go              # 唯一 tool dispatch
-│   │   ├── gates.go                 # grounding/provenance/follow-through
-│   │   ├── analysis.go              # analysis child contract + AnalysisResult validation
-│   │   ├── presentation.go          # validate + server enrichment
-│   │   └── events.go                # typed lifecycle events
-│   ├── ads/
-│   │   ├── backend.go               # AdBackend 只读合同；M2 添加 host-only AdWriter
-│   │   ├── entities.go              # advertiser/campaign/adgroup/ad/report types
-│   │   ├── changes.go               # strong staged-change types/state machine
-│   │   ├── guardrails.go            # budget/status/policy rules
-│   │   └── service.go               # stage/apply/discard/reconcile
-│   ├── tiktokmapi/
-│   │   ├── client.go                # HTTP、header、timeout、rate limit、errors
-│   │   ├── auth.go                  # TokenResolver；不向 agent 暴露 token
-│   │   ├── campaigns.go
-│   │   ├── adgroups.go
-│   │   ├── ads.go
-│   │   ├── reporting.go
-│   │   └── backend.go               # 实现 ads.AdBackend；M2 实现 AdWriter
+│   ├── agenthost/                    # tools、executor、analysis child、change/presentation gates
+│   ├── ads/                          # 强类型 Backend/Writer、实体、报告、计算和 change
+│   ├── runtime/
+│   │   ├── runtime.go               # repo-private Runtime/Request/Hooks 合同
+│   │   ├── pi.go                    # Pi process protocol、预算与 checkpoint confinement
+│   │   └── j.go                     # J-agent loop、model bridge、native checkpoint
+│   ├── tiktokmapi/                  # HTTP client、OAuth/vault、只读 Backend
 │   ├── fixture/                     # 同合同虚构数据；不回退真实接口失败
 │   ├── store/                       # SQLite repositories + migrations
 │   ├── httpapi/                     # auth/session/chat/change/health routes
-│   └── auth/                        # 单用户 host session；不保存 OAuth token
+│   └── oauthcallback/               # callback-only root handler
 ├── runtime/pi-bridge/
 │   ├── package.json                 # pin exact Pi package/version
 │   ├── src/main.ts                  # createAgentSession full-control entry
 │   ├── src/protocol.ts              # 私有 stdio envelope
-│   └── src/analysis.ts              # isolated analysis child session
+│   └── src/protocol.test.ts
+├── runtime/j-model-bridge/
+│   ├── package.json                 # pin exact Pi ModelRuntime transport
+│   ├── src/main.ts                  # OAuth/Codex model-only streaming
+│   └── src/protocol.ts              # J/native history normalization
 ├── skills/                          # 本项目 skills；非公共插件 API
 ├── web/                             # React + TypeScript + Vite
 └── docs/
 ```
 
-`ads.AdBackend` 是本项目的 integration/test seam。Go↔Pi bridge 是为这一个 runtime
-产生的私有协议，不承诺第三方兼容，也不包装成通用 agent RPC 标准。
+`ads.AdBackend` 是本项目的 integration/test seam。Go↔Node bridges 是各 runtime
+自己的私有协议，不承诺第三方兼容，也不包装成通用 agent RPC 标准。
 
 ## 7. 强类型领域模型
 
@@ -399,27 +398,21 @@ binary float；所有 ID 都作为 opaque string；MAPI 枚举通过 advertiser 
    memory；token 不进入这些对象。
 3. 从根目录 `AGENT.md` 读取静态 contract（启动时读取并 hash），工具 schema 按
    固定顺序构建；动态 context 单独 fenced。
-4. intent gate 决定首轮是否强制 grounding read：
-   - 表现问题：`get_performance_report`；
-   - 对象/预算/状态变更：`get_entity`；
-   - “应用/审批”表述：返回 host approval 边界，不触发 MAPI write。
-5. Go host 向 Pi sidecar 发出 turn；Pi AgentSession 使用
+4. Go host 向所选 runtime 发出 turn。Pi AgentSession 或 J-agent 使用
    `openai-codex/gpt-5.6-luna` 调用模型，并把公开文本、tool lifecycle 和 usage 事件
    映射回 Go。Go 维护 turn deadline、tool/delegate budgets 和 backstop 状态。
-6. executor 先 schema validate，再做 permission/capability/provenance/gate，然后调用
-   backend。独立 reads 以 `errgroup` 有界并发；stage calls 按 session 串行。
-7. 将 tool outcomes 同时转成：给模型的 fenced tool result、给 host 的 lifecycle
+5. executor 先 schema validate，再做 permission/capability/provenance/gate，然后调用
+   backend；同一 host turn 的工具执行按 session 串行。
+6. 将 tool outcomes 同时转成：给模型的 fenced tool result、给 host 的 lifecycle
    events、需要持久化的 provenance/change records。
-8. Pi 追加 assistant/tool-result messages 并持久化其 session checkpoint；Go 在收到
-   `turn.settled` 后提交用户可见 transcript 与 audit。sidecar 崩溃时只恢复到最后一个
-   完整 Pi checkpoint，未完成 tool call 由 Go 写明确 interrupted outcome。
-9. `maxToolRounds` 到达后 Go executor 拒绝新业务调用。Pi adapter 若能在安全边界移除
-   active tools，可再请求一次纯文本收尾；否则返回明确的 budget-exhausted 终态。
-   不假定 Pi 直接暴露 `tool_choice=none`。未配对 tool call 必须补齐受控失败结果；
-   取消、预算和恢复行为通过 adapter 契约测试后才算实现。
-10. 如果用户明确要求改变且未尝试 `stage_*`，runtime 最多追加一次 follow-through
-    reminder；被 gate block 的 stage 也算已尝试，避免死循环。
-11. 发出 `turn.completed`。v0 不自动执行 memory extraction；对话压缩只清理旧
+7. runtime 追加 assistant/tool-result messages 并持久化自己的私有 checkpoint；Go 只在
+   runtime 成功终结后提交 checkpoint reference、用户可见 transcript 与 audit。失败 turn
+   不推进 checkpoint，也不把已有草案冒充完整回答。
+8. `maxToolRounds` 到达后 adapter 移除 active tools，再允许一次纯文本 backstop；若模型
+   仍请求工具或不能完整终结，则返回 budget-exhausted/failed。Go 另设 64 次总工具上限。
+9. 复杂分析由 parent 显式调用 `run_analysis`，把本轮 report handles 交给只读 child；
+   child 只能用 analysis schema 和 Go 计算证据，不能继承 mutation provenance。
+10. 发出 `turn.completed`。v0 不自动执行 memory extraction；对话压缩只清理旧
     tool-result 大字段，provenance/change/audit/provider checkpoint 独立持久化。
 
 默认预算建议（上线前由 eval 调整）：
@@ -806,7 +799,11 @@ UI 显著标记虚构来源，失败不会伪装成零或成功；此门槛不�
 
 ### M3：可靠性与 eval
 
-- Pi session restore/compaction、prompt caching、explicit memory lifecycle。
+J-agent 作为第二个 runtime 已在首次私有仓库推送后完成：固定模块版本、model-only
+OAuth bridge、native state checkpoint、CLI/Web/analysis child 真模型验证均通过。
+这证明业务 host seam 可被两个 loop 消费，但不把它提升为公共 runtime 标准。
+
+- Pi/J 长会话压缩、prompt caching 压力验证；explicit memory lifecycle 已完成。
 - rate limiting、read retries、write reconciliation worker、OTel。
 - golden conversations、adversarial tool tests、load/latency baseline。
 
@@ -854,16 +851,17 @@ data 出现在模型上下文、SSE 或默认日志。
 
 ## 19. 开放范围与稳定性
 
-| 边界                | audience                            | v0 稳定性        | 演进方式                                           |
-| ------------------- | ----------------------------------- | ---------------- | -------------------------------------------------- |
-| MAPI wire structs   | `tiktokmapi` 包                     | private          | 随验证过的官方契约升级                             |
-| `ads.AdBackend`     | repo 内读服务/agent/tests           | experimental     | fixture + TikTok 验证合同；fake 不证明跨平台通用性 |
-| `AgentRuntime`      | Go host + Pi adapter；未来 Claude/J | experimental     | 第二个工作 adapter 后再评估稳定字段                |
-| Pi stdio bridge     | Go host + Pi sidecar                | private          | 随 pin 的 Pi 版本演进                              |
-| tool names/schemas  | Pi model + Go executor + evals      | experimental     | schema version + golden eval                       |
-| lifecycle events    | Pi bridge + Go host + React         | experimental v0  | envelope version，兼容期双读                       |
-| change/audit schema | host、审批、审计                    | stable candidate | 数据库迁移，不复用 provider raw model              |
-| skills              | repo-local                          | private recipe   | 独立版本和 eval，不作为 framework API              |
+| 边界                | audience                             | v0 稳定性        | 演进方式                                           |
+| ------------------- | ------------------------------------ | ---------------- | -------------------------------------------------- |
+| MAPI wire structs   | `tiktokmapi` 包                      | private          | 随验证过的官方契约升级                             |
+| `ads.AdBackend`     | repo 内读服务/agent/tests            | experimental     | fixture + TikTok 验证合同；fake 不证明跨平台通用性 |
+| `AgentRuntime`      | Go host + Pi/J adapters；未来 Claude | experimental     | 两个实现后仍保持 repo-private，按真实差异演进      |
+| Pi stdio bridge     | Go host + Pi sidecar                 | private          | 随 pin 的 Pi 版本演进                              |
+| J model bridge      | Go J-agent + Pi ModelRuntime         | private          | 保留 native state，不成为通用 J provider API       |
+| tool names/schemas  | 两个 runtime + Go executor + evals   | experimental     | schema version + golden eval                       |
+| lifecycle events    | runtime + Go host + React            | experimental v0  | envelope version，兼容期双读                       |
+| change/audit schema | host、审批、审计                     | stable candidate | 数据库迁移，不复用 provider raw model              |
+| skills              | repo-local                           | private recipe   | 独立版本和 eval，不作为 framework API              |
 
 适合开放给团队复用的是：明确的 change lifecycle、审批审计语义、事件 envelope 和
 经过验证的窄 MAPI client。模型 provider transcript、数据库实现、prompt cache 布局、

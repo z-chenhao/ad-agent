@@ -4,6 +4,8 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"strings"
 )
 
 type Tool struct {
@@ -62,4 +64,18 @@ type Hooks struct {
 }
 type Runtime interface {
 	Run(context.Context, Request, Hooks) (Result, error)
+}
+
+// Model processes inherit OAuth and proxy configuration, but never TikTok
+// application credentials that may be present for a separate callback command.
+func modelProcessEnv() []string {
+	env := make([]string, 0, len(os.Environ()))
+	for _, value := range os.Environ() {
+		key, _, _ := strings.Cut(value, "=")
+		if strings.HasPrefix(key, "AD_AGENT_TIKTOK_") || strings.HasPrefix(key, "TIKTOK_") {
+			continue
+		}
+		env = append(env, value)
+	}
+	return env
 }

@@ -17,38 +17,62 @@ type App struct {
 	Backend ads.Backend
 	Host    *agenthost.Host
 	Changes agenthost.Changes
+	Runtime string
 }
 
 func Open(root, stateDir string) (*App, error) {
+	return OpenRuntime(stateDir, ar.Pi{Entry: filepath.Join(root, "runtime", "pi-bridge", "dist", "main.js")})
+}
+
+// OpenRuntime composes the fixture lab with an explicitly selected agent runtime.
+func OpenRuntime(stateDir string, runtime ar.Runtime) (*App, error) {
+	if runtime == nil {
+		return nil, errors.New("runtime is required")
+	}
 	s, err := store.Open(stateDir)
 	if err != nil {
 		return nil, err
 	}
 	b := persistentFixture{s: s}
-	return compose(root, s, b, b, ads.FixturePolicy())
+	return compose(s, b, b, ads.FixturePolicy(), runtime)
 }
 
 // OpenBackend composes one already-bound real backend. Real writes stay disabled
 // and no Writer is accepted until endpoint semantics have been live-verified.
 func OpenBackend(root, stateDir string, backend ads.Backend) (*App, error) {
+	return OpenBackendRuntime(stateDir, backend, ar.Pi{Entry: filepath.Join(root, "runtime", "pi-bridge", "dist", "main.js")})
+}
+
+// OpenBackendRuntime composes a real read-only backend with an explicitly selected runtime.
+func OpenBackendRuntime(stateDir string, backend ads.Backend, runtime ar.Runtime) (*App, error) {
 	if backend == nil {
 		return nil, errors.New("backend is required")
+	}
+	if runtime == nil {
+		return nil, errors.New("runtime is required")
 	}
 	s, err := store.Open(stateDir)
 	if err != nil {
 		return nil, err
 	}
-	return compose(root, s, backend, nil, ads.ReadOnlyPolicy())
+	return compose(s, backend, nil, ads.ReadOnlyPolicy(), runtime)
 }
 
-func compose(root string, s *store.Store, backend ads.Backend, writer ads.Writer, policy ads.Policy) (*App, error) {
+func compose(s *store.Store, backend ads.Backend, writer ads.Writer, policy ads.Policy, runtime ar.Runtime) (*App, error) {
 	changes := agenthost.Changes{Backend: backend, Writer: writer, Store: s, Policy: policy}
-	h, err := agenthost.New(backend, ar.Pi{Entry: filepath.Join(root, "runtime", "pi-bridge", "dist", "main.js")}, s, changes)
+	h, err := agenthost.New(backend, runtime, s, changes)
 	if err != nil {
 		s.Close()
 		return nil, err
 	}
-	return &App{Store: s, Backend: backend, Host: h, Changes: changes}, nil
+	name := "custom"
+	switch runtime.(type) {
+	case ar.Pi, *ar.Pi:
+		name = "pi"
+	case ar.J, *ar.J:
+		name = "j"
+	}
+	return &App{Store: s, Backend: backend, Host: h, Changes: changes, Runtime: name}, nil
 }
 
 // Fixture state lives in the database so independent CLI invocations see the same lab world.

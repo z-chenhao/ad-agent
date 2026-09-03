@@ -1,33 +1,37 @@
 # 实施进度与验收记录
 
-更新：2026-09-04。无需重新确认架构或重新登录 Pi。项目仍在实施中，不能将
+更新：2026-09-04。无需重新确认架构、重新登录 Pi 或提供任何确认码。首版开发和 J runtime
+接入已完成；不能将
 CLI 验证扩大为整个产品完成，也不能把 fixture 结果称为真实 TikTok 接入成功。
 
 ## 已固定的决定
 
 - 单用户本地工具；Go host + React；AdBackend 与 runtime 分别替换。
-- 首个 runtime：Pi 0.84.4 薄 sidecar，ChatGPT OAuth，显式 gpt-5.6-luna。
-- CLI 验证后开发 Web；整体 review 和首次推送后继续实现真实 J-agent runtime。
+- 两个 runtime：Pi 0.84.4 薄 sidecar；J-agent 固定 commit `6ddcaee` + model-only bridge。
+  两者复用 ChatGPT OAuth，显式 gpt-5.6-luna。
+- CLI、Web、整体 review 和首次私有 GitHub 推送完成后，J-agent runtime 已按顺序接入。
 - 只读分析、草案、操作员审批分离；模型没有 apply 工具。
 - 无真实账户时使用明确标记的 fixture，不等待 TikTok 审批，不制造真实投放数据。
 
 ## 当前证据
 
-| 项目             | 结果                                                                                     | 证明范围                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go / Node / Pi   | Go 1.26.2、Node 24.14.1、Pi SDK 0.84.4                                                   | 本次工具链，依赖已锁定                                                                                                                        |
-| 编译             | make build 通过                                                                          | Go CLI/HTTP、Pi sidecar 与 React production bundle 可构建                                                                                     |
-| Go 测试          | go test -race ./... 通过                                                                 | 领域、fixture、host、store、bridge、HTTP 安全与重启验证                                                                                       |
-| TS 测试          | Pi bridge 协议解析与 fencing 测试通过                                                    | 不等于完整 provider 行为覆盖                                                                                                                  |
-| 真实 CLI 读取    | 2026-09-04 最新复测 22.9 秒完成账户/campaign 读取、实体卡片与来源披露                    | Go → Pi → Luna → Go 工具 → 续答；未创建草案                                                                                                   |
-| 真实 CLI 分析    | 两期报告、独立 child、Go 比较证据、可信卡片，约 93 秒                                    | ROAS 3 → 1.6667；首个 campaign 贡献 -1.3333，控制组 0                                                                                         |
-| 真实 CLI 草案    | 同会话恢复、重读对象、50 → 55 USD 总预算草案及预览，约 22 秒                             | 模型只 stage，未修改数据源                                                                                                                    |
-| 独立 CLI 审批    | 草案 approved/applied，重启读取预算 55，再次审批被拒绝                                   | fixture-only 写入、持久化与单次审批                                                                                                           |
-| React 浏览器测试 | 登录、概览、三级层级、CSRF、事件去重、桌面/手机布局通过                                  | production bundle + loopback host                                                                                                             |
-| Web 真模型用例   | 2026-09-04 最新复测 37.1 秒完成 stream → stage → 独立审批 → read-back → reload；5/5 通过 | 完整本地页面闭环；使用 fixture，不代表真实 TikTok 写入                                                                                        |
-| MAPI adapter     | HTTP fake 通过                                                                           | account/list/get/report、官方 `AUCTION_*` 层级、30 天 daily 上限、JSON query、分页、429/5xx、业务 code、跨账户和缺失指标；不等于真实权限/口径 |
-| OAuth callback   | 本地安全测试和 `oauth-start` CLI smoke 通过                                              | 官方 URL 保留/校验、一次性 hash-only state、token exchange、0600 credential、callback-only mux；尚未跑真实授权                                |
-| J-agent / GitHub | 尚未实施 / 尚未创建推送                                                                  | 按交付顺序继续                                                                                                                                |
+| 项目                | 结果                                                                                     | 证明范围                                                                                                                                      |
+| ------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go / Node / runtime | Go 1.26.2、Node 24.14.1、Pi SDK 0.84.4、J-agent `6ddcaee`                                | 本次工具链，依赖已锁定                                                                                                                        |
+| 编译                | make build 通过                                                                          | Go CLI/HTTP、Pi/J bridges 与 React production bundle 可构建                                                                                   |
+| Go 测试             | go test -race ./... 通过                                                                 | 领域、fixture、host、store、bridge、HTTP 安全与重启验证                                                                                       |
+| TS 测试             | Pi bridge fencing；J native-state replay、失配、frame 限制和空 reasoning 规范化通过      | 不等于完整 provider 行为覆盖                                                                                                                  |
+| 真实 CLI 读取       | 2026-09-04 最新复测 22.9 秒完成账户/campaign 读取、实体卡片与来源披露                    | Go → Pi → Luna → Go 工具 → 续答；未创建草案                                                                                                   |
+| 真实 CLI 分析       | 两期报告、独立 child、Go 比较证据、可信卡片，约 93 秒                                    | ROAS 3 → 1.6667；首个 campaign 贡献 -1.3333，控制组 0                                                                                         |
+| 真实 CLI 草案       | 同会话恢复、重读对象、50 → 55 USD 总预算草案及预览，约 22 秒                             | 模型只 stage，未修改数据源                                                                                                                    |
+| 独立 CLI 审批       | 草案 approved/applied，重启读取预算 55，再次审批被拒绝                                   | fixture-only 写入、持久化与单次审批                                                                                                           |
+| React 浏览器测试    | 登录、概览、三级层级、CSRF、事件去重、桌面/手机布局通过                                  | production bundle + loopback host                                                                                                             |
+| Web 真模型用例      | 2026-09-04 最新复测 37.1 秒完成 stream → stage → 独立审批 → read-back → reload；5/5 通过 | 完整本地页面闭环；使用 fixture，不代表真实 TikTok 写入                                                                                        |
+| MAPI adapter        | HTTP fake 通过                                                                           | account/list/get/report、官方 `AUCTION_*` 层级、30 天 daily 上限、JSON query、分页、429/5xx、业务 code、跨账户和缺失指标；不等于真实权限/口径 |
+| OAuth callback      | 本地安全测试和 `oauth-start` CLI smoke 通过                                              | 官方 URL 保留/校验、一次性 hash-only state、token exchange、0600 credential、callback-only mux；尚未跑真实授权                                |
+| J-agent CLI         | 真实读取 24.5 秒；同 session 恢复 + analysis child 147.9 秒；草案预览 44.5 秒通过        | J-agent 真正拥有 loop；model-only bridge 复用 OAuth/Luna；未接触真实 TikTok                                                                   |
+| J-agent Web         | 5/5 Playwright 通过；真模型 stream → stage → 独立审批 → read-back → reload 为 48.4 秒    | 完整本地 fixture 页面闭环；空 reasoning 回归已覆盖                                                                                            |
+| GitHub              | 首版及 J runtime 均已完成 review，目标私有仓库 `z-chenhao/ad-agent`                      | 不代表开源发布或真实广告写授权                                                                                                                |
 
 模型验证仅发送 fixture 数据，使用既有 ChatGPT OAuth。最初探针的 fetch 失败源于
 遗漏 HTTP 初始化；正式 sidecar 显式使用 undici 的代理 dispatcher 与 fetch。
@@ -44,7 +48,7 @@ Pi/Luna 的 readiness probe、真实 CLI 读取和 Web 真模型 E2E 均复测�
 ```sh
 make cli
 make test
-./bin/ad-agent chat --session diagnosis --json --message '以 fixture 最新日期为锚点，比较近 7 天与前 7 天 campaign ROAS，调用分析子代理并展示计算证据，不创建草案。'
+./bin/ad-agent chat --runtime j --session diagnosis-j --json --message '以 fixture 最新日期为锚点，比较近 7 天与前 7 天 campaign ROAS，调用分析子代理并展示计算证据，不创建草案。'
 ```
 
 历史探针可使用仓库锁定 SDK：
@@ -88,8 +92,9 @@ retention；localhost 不经过公网隧道，风险面更小。官方 [Authenti
    Advertiser authorization URL、advertiser binding、报表字段和 Ads Manager 对账。
 4. Web：已完成首版同源登录、CSRF、SSE 重放、React 页面、普通及真模型 Playwright E2E；
    MAPI 环境 E2E 受 app approval 阻塞，无障碍审计留到真实产品 UI 阶段。
-5. Review：安全/质量审查、依赖许可、CI 和文档命令正在做最终验证；之后创建私有仓库并推送。
-6. J runtime：J-agent 真正拥有 model/tool loop，复用业务门禁及 OAuth/Luna。
+5. Review：首版安全/质量审查、依赖许可、CI、私有仓库以及 J runtime 完整回归均已完成。
+6. J runtime：实际 model/tool loop、私有 native continuation、CLI/Web/analysis child 已验证；
+   长对话及故障矩阵仍属于后续可靠性工作，不阻塞首版开发完成。
 
 ## 以后需要用户参与
 
@@ -98,4 +103,4 @@ retention；localhost 不经过公网隧道，风险面更小。官方 [Authenti
   TikTok 邮件验证码仅在 TikTok 页面输入；验证码、`auth_code`、token 不发送到聊天。
   目前无需用户提供确认码。
 - 真实写入：明确受控测试对象、预算上限和启停范围，每条单独审批。开发不等于花费授权。
-- 远端发布：默认私有仓库，不把创建仓库理解为公开数据或凭证授权。
+- 远端发布：仓库保持私有；公开发布或添加许可证需要另行明确决定。

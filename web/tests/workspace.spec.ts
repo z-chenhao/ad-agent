@@ -2,9 +2,10 @@ import { test, expect, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 async function login(page: Page) {
   await page.goto("/");
+  const dataDir = process.env.AD_AGENT_E2E_RUNTIME === "j" ? "e2e-j" : "e2e";
   const key = (
     await readFile(
-      new URL("../../.data/e2e/operator-key", import.meta.url),
+      new URL(`../../.data/${dataDir}/operator-key`, import.meta.url),
       "utf8",
     )
   ).trim();
@@ -13,6 +14,9 @@ async function login(page: Page) {
   await expect(
     page.getByRole("heading", { name: "账户概览", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".sidebar-bottom")).toContainText(
+    process.env.AD_AGENT_E2E_RUNTIME === "j" ? "J-agent + Luna" : "Pi + Luna",
+  );
 }
 test("authenticated overview and consistent hierarchy", async ({
   page,

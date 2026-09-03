@@ -5,6 +5,7 @@ go 1.26.0
 require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	github.com/shopspring/decimal v1.4.0
+	github.com/z-chenhao/J/J-agent v0.0.0-20260731152723-6ddcaee9bc0d
 	modernc.org/sqlite v1.58.0
 )
 

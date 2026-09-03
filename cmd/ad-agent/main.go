@@ -11,6 +11,7 @@ import (
 	"github.com/z-chenhao/ad-agent/internal/app"
 	"github.com/z-chenhao/ad-agent/internal/httpapi"
 	"github.com/z-chenhao/ad-agent/internal/oauthcallback"
+	ar "github.com/z-chenhao/ad-agent/internal/runtime"
 	"github.com/z-chenhao/ad-agent/internal/store"
 	"github.com/z-chenhao/ad-agent/internal/tiktokmapi"
 	"io"
@@ -40,7 +41,8 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	command := args[0]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(out)
-	root := fs.String("root", ".", "项目根目录，用于定位已构建的 Pi bridge")
+	root := fs.String("root", ".", "项目根目录，用于定位已构建的 runtime bridge")
+	runtimeName := fs.String("runtime", "pi", "agent runtime：pi 或 j；同一 session 不要切换 runtime")
 	data := fs.String("data-dir", ".data", "本机私有状态目录（0700）")
 	session := fs.String("session", "local", "会话 ID")
 	message := fs.String("message", "", "单轮消息；省略时进入交互模式")
@@ -140,9 +142,18 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		fmt.Fprintln(out, prepared)
 		return nil
 	}
+	var selectedRuntime ar.Runtime
+	switch *runtimeName {
+	case "pi":
+		selectedRuntime = ar.Pi{Entry: filepath.Join(absolute, "runtime", "pi-bridge", "dist", "main.js")}
+	case "j":
+		selectedRuntime = ar.J{Entry: filepath.Join(absolute, "runtime", "j-model-bridge", "dist", "main.js")}
+	default:
+		return errors.New("runtime must be pi or j")
+	}
 	var a *app.App
 	if *backendName == "fixture" {
-		a, e = app.Open(absolute, *data)
+		a, e = app.OpenRuntime(*data, selectedRuntime)
 	} else if *backendName == "tiktok" {
 		if *tiktokAdvertiser == "" {
 			return errors.New("tiktok backend requires --tiktok-advertiser")
@@ -159,7 +170,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		if err != nil {
 			return err
 		}
-		a, e = app.OpenBackend(absolute, *data, realBackend)
+		a, e = app.OpenBackendRuntime(*data, realBackend, selectedRuntime)
 	} else {
 		return errors.New("backend must be fixture or tiktok")
 	}
@@ -180,7 +191,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 		server := &http.Server{Addr: *addr, Handler: handler.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
-		fmt.Fprintf(out, "Ad Agent: %s\n登录密钥保存在本机文件 %s（不要发到聊天或提交 Git）\n数据源：%s；主应用未连接 3000 隧道。\n", origin, filepath.Join(a.Store.Dir, "operator-key"), *backendName)
+		fmt.Fprintf(out, "Ad Agent: %s\n登录密钥保存在本机文件 %s（不要发到聊天或提交 Git）\n数据源：%s；runtime：%s；主应用未连接 3000 隧道。\n", origin, filepath.Join(a.Store.Dir, "operator-key"), *backendName, *runtimeName)
 		go func() {
 			<-ctx.Done()
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -280,7 +291,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return chat(*message)
 	}
 	if !*asJSON && !*events {
-		fmt.Fprintf(out, "Ad Agent / %s / Pi + Luna\n输入 /exit 退出；审批需独立 approve --id 命令。\n", *backendName)
+		fmt.Fprintf(out, "Ad Agent / %s / %s + Luna\n输入 /exit 退出；审批需独立 approve --id 命令。\n", *backendName, *runtimeName)
 	}
 	scan := bufio.NewScanner(in)
 	scan.Buffer(make([]byte, 4096), 16001)

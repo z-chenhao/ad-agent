@@ -5,6 +5,7 @@
   "type": "module",
   "workspaces": [
     "runtime/pi-bridge",
+    "runtime/j-model-bridge",
     "web"
   ],
   "scripts": {

@@ -1,8 +1,8 @@
 # Ad Agent
 
 单用户、本地优先的广告分析与审批助手。Go 拥有广告数据、计算证据、业务工具和审批
-账本；Pi SDK 负责模型循环，使用 ChatGPT OAuth 与 `gpt-5.6-luna`。
-React 页面已接通同一 Go host，真实 J-agent runtime 将在首版整体验收和推送后接入。
+账本。现在有两个可运行的 agent runtime：Pi SDK sidecar，或 Go 进程内的 J-agent；
+两者都复用本机 ChatGPT OAuth，并显式调用 `gpt-5.6-luna`。React 页面接通同一 Go host。
 
 目前可运行 CLI + React + fixture 闭环，并已实现经过 HTTP fake 验证的只读 TikTok MAPI
 adapter 与 callback-only OAuth 接收端。**fixture 是虚构数据，不是真实 TikTok 账户；
@@ -20,12 +20,14 @@ make cli
 ./bin/ad-agent inspect
 ./bin/ad-agent report --level campaign --start 2022-07-11 --end 2022-07-17
 ./bin/ad-agent chat --message '过去 7 天哪个 campaign 拉低 ROAS？与前 7 天比较，给出反证。'
+./bin/ad-agent chat --runtime j --session j-lab --message '读取账户并列出 campaign。'
 ./bin/ad-agent chat
 ```
 
 `--json` 输出最终结构化结果，`--events` 输出公开生命周期 NDJSON，`--session` 选择
 会话。状态保存在 `.data/`，目录权限必须为 `0700`。不要分享该目录：它包含业务会话
-和私有 provider checkpoint。完成 TikTok 授权后，Access Token 也会以 0600 权限保存在
+和私有 provider checkpoint。`--runtime` 可选 `pi`（默认）或 `j`；不要在同一个
+`--session` 中途切换 runtime，应新建 session。完成 TikTok 授权后，Access Token 也会以 0600 权限保存在
 `.data/credentials/`；该初版安全边界是单个 macOS 用户账户，不是多用户 vault。
 
 ## 草案与审批
@@ -35,6 +37,7 @@ Web 启动：
 ```sh
 make build
 ./bin/ad-agent serve --addr 127.0.0.1:18080
+./bin/ad-agent serve --runtime j --addr 127.0.0.1:18080
 ```
 
 打开启动输出中的本地地址，用输出提示的 `operator-key` 文件内容登录。密钥只输入
@@ -83,6 +86,8 @@ npm exec --workspace=@ad-agent/web -- playwright install chromium
 make test-web
 # 可选真模型浏览器验证：消耗 ChatGPT 额度，仅修改 fixture
 AD_AGENT_LIVE_E2E=1 npm run test:e2e --workspace=@ad-agent/web
+# J-agent + Luna 的同一组浏览器验证
+AD_AGENT_E2E_RUNTIME=j AD_AGENT_LIVE_E2E=1 npm run test:e2e --workspace=@ad-agent/web
 ```
 
 普通测试不需要模型或 TikTok 凭证；真实模型、fixture、HTTP fake 与平台验收分开记录。

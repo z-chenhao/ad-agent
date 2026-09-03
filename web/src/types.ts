@@ -3,6 +3,9 @@ export interface Source {
   environment: string;
   account_id: string;
 }
+export interface RuntimeConfig {
+  runtime: "pi" | "j" | "custom";
+}
 export interface Account {
   id: string;
   name: string;

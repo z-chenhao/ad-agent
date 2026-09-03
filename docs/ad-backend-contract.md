@@ -8,7 +8,7 @@
 MAPI 是外部协议，`tiktokmapi.Backend` 是 `ads.AdBackend` 的一个实现。
 `fixture.Backend` 实现同一合同，用于无 TikTok 凭证的确定性开发和验证。
 AgentRuntime 与 AdBackend 独立变化：换 Pi/Claude/J 不重写广告接入，换数据来源不重写
-对话、分析和审批机制。首版只实现 Pi + fixture + TikTok，不同时开发其他平台。
+对话、分析和审批机制。首版实现 Pi/J + fixture + TikTok，不同时开发其他平台。
 
 ```text
 React / Agent tools → Go executor / 读服务 → ads.AdBackend
@@ -33,7 +33,7 @@ React / Agent tools → Go executor / 读服务 → ads.AdBackend
 不变量：身份来自 host；只读不修改远端；源数据与模拟数据不可混用；报告保留口径和
 完整性；分析不能授权写入；只有明确的 host 审批能进入远端 writer。
 
-当前策略：单用户、TikTok 首发、Pi/Luna、固定 analysis child、最多 6 轮工具调用、
+当前策略：单用户、TikTok 首发、Pi 或 J + Luna、固定 analysis child、最多 6 轮工具调用、
 一次只改一个对象、默认关闭真实写入。模型、阈值、重试预算和端口不属于 Backend
 公共语义；变更策略不能削弱上述不变量。
 
@@ -130,7 +130,7 @@ writer 至少区分：
 | AdWriter         | Go change service / ads                | M2 experimental，不向模型或浏览器公开          |
 | Snapshot/证据    | analysis、presentation / Go host       | 明确身份和语义，持久化通过版本迁移演进         |
 | TikTok wire/auth | tiktokmapi、认证模块                   | private，不作为公共领域 API                    |
-| AgentRuntime     | host、Pi adapter / agenthost           | 独立 experimental，未来 Claude/J 复用业务工具  |
+| AgentRuntime     | host、Pi/J adapter / agenthost         | 两个实现已验证，仍为 repo-private experimental |
 
 保留复杂性：账户/环境绑定、报告口径、未知写结果、审批审计、只读隔离。
 延后复杂性：万能广告模型、多租户、插件市场、全量 SDK、数仓同步、任意 SQL/代码执行、

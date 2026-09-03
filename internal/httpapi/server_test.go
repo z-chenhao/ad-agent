@@ -102,6 +102,10 @@ func TestAuthOriginCSRFAndPublicSurface(t *testing.T) {
 		CSRF string `json:"csrf"`
 	}
 	json.Unmarshal(b, &auth)
+	code, b = request(t, c, "GET", ts.URL+"/api/v1/config", "", "", nil)
+	if code != 200 || !strings.Contains(string(b), `"runtime":"pi"`) {
+		t.Fatal("runtime config missing", code, string(b))
+	}
 	code, b = request(t, c, "GET", ts.URL+"/api/v1/advertisers/current", "", "", nil)
 	if code != 200 || strings.Contains(string(b), key) {
 		t.Fatal("account or secret leak", code)

@@ -1,4 +1,6 @@
 import { defineConfig } from "@playwright/test";
+const runtime = process.env.AD_AGENT_E2E_RUNTIME === "j" ? "j" : "pi";
+const dataDir = runtime === "j" ? "../.data/e2e-j" : "../.data/e2e";
 export default defineConfig({
   testDir: "./tests",
   fullyParallel: false,
@@ -13,8 +15,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   webServer: {
-    command:
-      "../bin/ad-agent serve --root .. --data-dir ../.data/e2e --addr 127.0.0.1:18481",
+    command: `../bin/ad-agent serve --root .. --runtime ${runtime} --data-dir ${dataDir} --addr 127.0.0.1:18481`,
     url: "http://127.0.0.1:18481/api/v1/health/live",
     reuseExistingServer: false,
     timeout: 20_000,

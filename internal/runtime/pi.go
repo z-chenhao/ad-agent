@@ -47,6 +47,7 @@ func (p Pi) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 		node = "node"
 	}
 	cmd := exec.CommandContext(ctx, node, p.Entry)
+	cmd.Env = modelProcessEnv()
 	// Credentials and proxy configuration remain process-local; stderr never enters public logs.
 	cmd.Stderr = io.Discard
 	in, err := cmd.StdinPipe()
