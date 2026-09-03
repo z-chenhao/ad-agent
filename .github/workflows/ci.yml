@@ -45,5 +45,6 @@ jobs:
           node-version: 24.14.1
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: make build
       - run: npm exec --workspace=@ad-agent/web -- playwright install --with-deps chromium
       - run: npm run test:e2e --workspace=@ad-agent/web
