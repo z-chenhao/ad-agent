@@ -1,0 +1,65 @@
+// Package runtime defines the private host/runtime seam. Business tools belong to the host.
+package runtime
+
+import (
+	"context"
+	"encoding/json"
+)
+
+type Tool struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
+}
+type Call struct {
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+	Round     int             `json:"round"`
+}
+type ToolResult struct {
+	OK    bool            `json:"ok"`
+	Data  json.RawMessage `json:"data,omitempty"`
+	Error string          `json:"error,omitempty"`
+}
+
+func Value(v any) ToolResult {
+	b, e := json.Marshal(v)
+	if e != nil {
+		return Failure("result_encoding_failed")
+	}
+	return ToolResult{OK: true, Data: b}
+}
+func Failure(code string) ToolResult { return ToolResult{Error: code} }
+
+type Request struct {
+	System     string `json:"system"`
+	Prompt     string `json:"prompt"`
+	Tools      []Tool `json:"tools"`
+	MaxRounds  int    `json:"max_rounds"`
+	Checkpoint string `json:"checkpoint,omitempty"`
+	SessionDir string `json:"session_dir,omitempty"`
+}
+type Usage struct {
+	Input      int64 `json:"input"`
+	Output     int64 `json:"output"`
+	CacheRead  int64 `json:"cache_read"`
+	CacheWrite int64 `json:"cache_write"`
+}
+type Result struct {
+	Text       string `json:"text"`
+	Stop       string `json:"stop"`
+	Checkpoint string `json:"checkpoint,omitempty"`
+	Usage      Usage  `json:"usage"`
+}
+type Event struct {
+	Type string `json:"type"`
+	Text string `json:"text,omitempty"`
+}
+type Hooks struct {
+	Execute func(context.Context, Call) ToolResult
+	Emit    func(Event)
+}
+type Runtime interface {
+	Run(context.Context, Request, Hooks) (Result, error)
+}

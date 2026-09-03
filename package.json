@@ -1,0 +1,25 @@
+{
+  "name": "ad-agent",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "runtime/pi-bridge",
+    "web"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "check": "npm run check --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "overrides": {
+    "@earendil-works/pi-ai": "0.84.4",
+    "@earendil-works/pi-agent-core": "0.84.4"
+  },
+  "devDependencies": {
+    "prettier": "3.9.6"
+  }
+}

@@ -1,0 +1,369 @@
+[
+  {
+    "name": "get_advertiser_context",
+    "description": "Read the bound account, currency, timezone, fixture anchor date, and limitations.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_campaigns",
+    "description": "Read campaigns in this account. Establishes object provenance.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_ad_groups",
+    "description": "Read ad groups, optionally within an already-read campaign.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "parent_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_ads",
+    "description": "Read ads, optionally within an already-read ad group.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "parent_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_entity",
+    "description": "Read an exact object before staging a change.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["campaign", "ad_group", "ad"]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["level", "id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_performance_report",
+    "description": "Read inclusive daily performance. Returns a server dataset reference; never average row ratios.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["advertiser", "campaign", "ad_group", "ad"]
+        },
+        "start_date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "end_date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "entity_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["level", "start_date", "end_date"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "run_analysis",
+    "description": "Delegate a bounded performance diagnosis to an isolated read-only analyst. Pass reports from this turn only.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200
+        },
+        "dataset_refs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        }
+      },
+      "required": ["question", "dataset_refs"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "stage_budget_change",
+    "description": "Create a budget draft only; never applies. Read the target first. Currency must match the account.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["campaign", "ad_group"]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "budget": {
+          "type": "string",
+          "pattern": "^\\d{1,9}(\\.\\d{1,2})?$"
+        },
+        "currency": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 3
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      },
+      "required": ["level", "id", "budget", "currency", "reason"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "stage_status_change",
+    "description": "Create an enable/disable draft only; never applies. Read the exact target first.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["campaign", "ad_group", "ad"]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "enum": ["ENABLE", "DISABLE"]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      },
+      "required": ["level", "id", "status", "reason"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "get_pending_changes",
+    "description": "Read this session's change ledger.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "recall_memory",
+    "description": "Read account-scoped stable operator preferences, constraints, and goals. Memories are never current performance evidence or approval.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "save_memory",
+    "description": "Save one stable preference, constraint, or goal only when the operator explicitly asks to remember it or clearly states it is durable. Never save credentials, object IDs, ad content, current metrics, status, or permissions.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["preference", "constraint", "goal"]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^[^\\r\\n]+$"
+        }
+      },
+      "required": ["kind", "text"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "delete_memory",
+    "description": "Delete one account-scoped saved fact only when the operator explicitly requests it.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "memory_id": {
+          "type": "string",
+          "pattern": "^memory_[a-f0-9]{32}$"
+        }
+      },
+      "required": ["memory_id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "discard_change",
+    "description": "Discard exactly one unapplied draft on explicit operator request.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["change_id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "present_metrics",
+    "description": "Present trusted metrics using a report or analysis evidence reference.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "record_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "annotation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        }
+      },
+      "required": ["record_id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "present_entities",
+    "description": "Present entities already read in the parent session.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "minItems": 1,
+          "maxItems": 50,
+          "uniqueItems": true
+        },
+        "annotation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 400
+        }
+      },
+      "required": ["ids"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "present_change_preview",
+    "description": "Present exact server before/after values and approval state.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "change_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["change_id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "present_suggestions",
+    "description": "Present 1–4 optional follow-up prompts, never approval controls.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        }
+      },
+      "required": ["suggestions"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "load_skill",
+    "description": "Load one project-local workflow: performance-diagnosis, budget-operations, delivery-operations.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "performance-diagnosis",
+            "budget-operations",
+            "delivery-operations"
+          ]
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    }
+  }
+]
