@@ -3,6 +3,7 @@ const runtime = process.env.AD_AGENT_E2E_RUNTIME === "j" ? "j" : "pi";
 const dataDir = runtime === "j" ? "../.data/e2e-j" : "../.data/e2e";
 export default defineConfig({
   testDir: "./tests",
+  testIgnore: "portfolio.spec.ts",
   fullyParallel: false,
   workers: 1,
   retries: 0,

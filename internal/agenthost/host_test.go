@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"github.com/shopspring/decimal"
 	"github.com/z-chenhao/ad-agent/internal/ads"
-	"github.com/z-chenhao/ad-agent/internal/fixture"
 	ar "github.com/z-chenhao/ad-agent/internal/runtime"
+	"github.com/z-chenhao/ad-agent/internal/sandbox"
 	"github.com/z-chenhao/ad-agent/internal/store"
 	"os"
 	"strings"
@@ -20,7 +20,7 @@ type fakeRuntime func(context.Context, ar.Request, ar.Hooks) (ar.Result, error)
 func (f fakeRuntime) Run(c context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
 	return f(c, r, h)
 }
-func testHost(t *testing.T, r ar.Runtime) (*Host, *fixture.Backend) {
+func testHost(t *testing.T, r ar.Runtime) (*Host, *sandbox.Backend) {
 	t.Helper()
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
@@ -29,11 +29,11 @@ func testHost(t *testing.T, r ar.Runtime) (*Host, *fixture.Backend) {
 		t.Fatal(e)
 	}
 	t.Cleanup(func() { s.Close() })
-	b, e := fixture.New()
+	b, e := sandbox.New()
 	if e != nil {
 		t.Fatal(e)
 	}
-	h, e := New(b, r, s, Changes{Backend: b, Writer: b, Store: s, Policy: ads.FixturePolicy()})
+	h, e := New(b, r, s, Changes{Backend: b, Writer: b, Store: s, Policy: ads.SandboxPolicy()})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -45,7 +45,7 @@ func call(name, args string) ar.Call {
 }
 
 func TestSessionPinsExplicitModelSelection(t *testing.T) {
-	selected := ar.ModelSelection{Provider: ar.CodexProvider, Model: "gpt-5.4-mini", Reasoning: "medium"}
+	selected := ar.ModelSelection{Provider: ar.CodexProvider, Model: "gpt-5.4-mini", Reasoning: "medium", AuthMode: ar.ChatGPTOAuth}
 	seen := []ar.ModelSelection{}
 	model := fakeRuntime(func(_ context.Context, request ar.Request, _ ar.Hooks) (ar.Result, error) {
 		seen = append(seen, request.Model)
@@ -230,7 +230,7 @@ func TestAnalysisDoesNotGrantProvenance(t *testing.T) {
 			}
 			var calc ads.Calculation
 			json.Unmarshal(result.Data, &calc)
-			payload := `{"summary":"fixture","findings":[{"evidence_id":"` + calc.ID + `","entity_id":"campaign_example_1","observation":"lower ROAS"}],"counter_evidence":["control stable"],"limitations":["synthetic"],"method":"weighted ratio"}`
+			payload := `{"summary":"sandbox","findings":[{"evidence_id":"` + calc.ID + `","entity_id":"campaign_example_1","observation":"lower ROAS"}],"counter_evidence":["control stable"],"limitations":["synthetic"],"method":"weighted ratio"}`
 			if !h.Execute(ctx, call("submit_analysis", payload)).OK {
 				t.Fatal("submit failed")
 			}
@@ -279,7 +279,7 @@ func TestExplicitMemoryLifecycleAndInjection(t *testing.T) {
 	if _, err := h.Run(context.Background(), "memory-test", "Delete that constraint", nil); err != nil {
 		t.Fatal(err)
 	}
-	memories, err := h.Store.Memories(context.Background(), ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "advertiser_example_1"}, 50)
+	memories, err := h.Store.Memories(context.Background(), ads.Source{Backend: "sandbox", Environment: "baseline", AccountID: "advertiser_example_1"}, 50)
 	if err != nil || len(memories) != 0 {
 		t.Fatalf("memory still present: %#v %v", memories, err)
 	}

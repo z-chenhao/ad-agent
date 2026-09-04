@@ -505,7 +505,7 @@ func sameJSON(a, b json.RawMessage) bool {
 
 func safeJBridgeCode(code string) string {
 	switch code {
-	case "assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing", "invalid_model":
+	case "assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing", "api_key_missing", "invalid_model":
 		return code
 	default:
 		return "runtime_failed"
@@ -513,7 +513,7 @@ func safeJBridgeCode(code string) string {
 }
 
 func safeJBridgeError(err error) string {
-	for _, code := range []string{"assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing", "invalid_model"} {
+	for _, code := range []string{"assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing", "api_key_missing", "invalid_model"} {
 		if strings.Contains(err.Error(), code) {
 			return code
 		}

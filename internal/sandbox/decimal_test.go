@@ -1,4 +1,4 @@
-package fixture
+package sandbox
 
 import "github.com/shopspring/decimal"
 

@@ -8,9 +8,15 @@ export interface Start {
   system: string;
   prompt: string;
   model: {
-    provider: "openai-codex";
+    provider: string;
     model: string;
     reasoning: "medium";
+    auth_mode: "chatgpt_oauth" | "api_key";
+    api?: "anthropic-messages" | "openai-responses" | "openai-completions";
+    base_url?: string;
+    api_key_env?: string;
+    context_window?: number;
+    max_output_tokens?: number;
   };
   tools: ToolSpec[];
   max_rounds: number;
@@ -41,8 +47,7 @@ export function parseInput(line: string): Start | Reply {
     typeof o.prompt !== "string" ||
     !o.model ||
     typeof o.model !== "object" ||
-    (o.model as Record<string, unknown>).provider !== "openai-codex" ||
-    !supportedModels.has(String((o.model as Record<string, unknown>).model)) ||
+    !validModel(o.model as Record<string, unknown>) ||
     (o.model as Record<string, unknown>).reasoning !== "medium" ||
     !Array.isArray(o.tools) ||
     !Number.isInteger(o.max_rounds) ||
@@ -78,6 +83,22 @@ const supportedModels = new Set([
   "gpt-5.6-sol",
   "gpt-5.6-terra",
 ]);
+
+function validModel(model: Record<string, unknown>): boolean {
+  if (model.reasoning !== "medium") return false;
+  if (model.auth_mode === "chatgpt_oauth")
+    return model.provider === "openai-codex" && supportedModels.has(String(model.model));
+  return (
+    model.auth_mode === "api_key" &&
+    typeof model.provider === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model.provider) &&
+    typeof model.model === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model.model) &&
+    ["anthropic-messages", "openai-responses", "openai-completions"].includes(String(model.api)) &&
+    typeof model.base_url === "string" &&
+    typeof model.api_key_env === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(model.api_key_env) &&
+    Number.isInteger(model.context_window) && Number(model.context_window) >= 4096 &&
+    Number.isInteger(model.max_output_tokens) && Number(model.max_output_tokens) >= 256
+  );
+}
 // JSON escaping prevents data from closing the boundary. This is defense in depth, not authorization.
 export function fence(value: unknown): string {
   return (

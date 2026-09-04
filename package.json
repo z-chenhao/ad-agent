@@ -6,6 +6,7 @@
   "workspaces": [
     "runtime/pi-bridge",
     "runtime/j-model-bridge",
+    "runtime/claude-bridge",
     "web"
   ],
   "scripts": {

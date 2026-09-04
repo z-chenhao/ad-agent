@@ -29,7 +29,7 @@ type skillRegistry struct {
 	byName map[string]string
 }
 
-func loadSkillRegistry() (skillRegistry, error) {
+func loadSkillRegistry(canCreate ...bool) (skillRegistry, error) {
 	b, err := assets.Assets.ReadFile("skills/manifest.json")
 	if err != nil {
 		return skillRegistry{}, err
@@ -64,12 +64,24 @@ func loadSkillRegistry() (skillRegistry, error) {
 			return skillRegistry{}, fmt.Errorf("skill metadata mismatch for %q", entry.Name)
 		}
 		if entry.Status == "active" {
+			if contains(entry.RequiredTools, "stage_entity_create") && (len(canCreate) == 0 || !canCreate[0]) {
+				continue
+			}
 			r.active = append(r.active, entry)
 			r.byName[entry.Name] = instructions
 		}
 	}
 	sort.Slice(r.active, func(i, j int) bool { return r.active[i].Name < r.active[j].Name })
 	return r, nil
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func parseSkill(text string) (name, description, body string, err error) {

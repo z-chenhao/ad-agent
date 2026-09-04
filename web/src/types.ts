@@ -4,7 +4,8 @@ export interface Source {
   account_id: string;
 }
 export interface RuntimeConfig {
-  runtime: "pi" | "j" | "custom";
+  mode: "single_advertiser" | "portfolio";
+  runtime: "pi" | "j" | "claude" | "custom";
   writes: boolean;
   model: {
     default: ModelSelection;
@@ -20,15 +21,48 @@ export interface RuntimeConfig {
     automatic_memory_capture: boolean;
   };
 }
+export interface Portfolio {
+  id: string;
+  name: string;
+  accounts: Account[];
+}
+export interface PortfolioAccountPerformance {
+  account: Account;
+  metrics: Metrics;
+  roas: string | null;
+  complete: boolean;
+  limitations: string[];
+}
+export interface PortfolioReport {
+  id: string;
+  portfolio_id: string;
+  start_date: string;
+  end_date: string;
+  accounts: PortfolioAccountPerformance[];
+  limitations: string[];
+  fetched_at: string;
+}
 export interface ModelSelection {
   provider: string;
   model: string;
   reasoning: "medium";
+  auth_mode: "chatgpt_oauth" | "api_key";
+  api?: "anthropic-messages" | "openai-responses" | "openai-completions";
+  base_url?: string;
+  api_key_env?: string;
+  context_window?: number;
+  max_output_tokens?: number;
 }
 export interface ModelOption {
   provider: string;
   model: string;
   label: string;
+  auth_mode: "chatgpt_oauth" | "api_key";
+  api?: "anthropic-messages" | "openai-responses" | "openai-completions";
+  base_url?: string;
+  api_key_env?: string;
+  context_window?: number;
+  max_output_tokens?: number;
 }
 export interface Account {
   id: string;
@@ -118,8 +152,19 @@ export interface Change {
   session_id: string;
   source: Source;
   kind: string;
-  before: Entity;
-  after: Entity;
+  before?: Entity;
+  after?: Entity;
+  parent?: Entity;
+  create?: {
+    level: string;
+    parent_id?: string;
+    name: string;
+    status: string;
+    budget?: string;
+    budget_mode?: string;
+    objective?: string;
+  };
+  created?: Entity;
   state: string;
   reason: string;
   currency: string;

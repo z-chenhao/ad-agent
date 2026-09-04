@@ -110,7 +110,9 @@ func Open(dir string) (*Store, error) {
  CREATE TABLE IF NOT EXISTS changes(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,state TEXT NOT NULL,payload BLOB NOT NULL);
  CREATE TABLE IF NOT EXISTS events(turn_id TEXT NOT NULL,seq INTEGER NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(turn_id,seq));
  CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY AUTOINCREMENT,change_id TEXT NOT NULL,at TEXT NOT NULL,payload BLOB NOT NULL);
- CREATE TABLE IF NOT EXISTS fixture_state(id TEXT PRIMARY KEY,payload BLOB NOT NULL);
+ CREATE TABLE IF NOT EXISTS sandbox_state(scenario TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(scenario,id));
+ CREATE TABLE IF NOT EXISTS sandbox_entities(environment TEXT NOT NULL,id TEXT NOT NULL,payload BLOB NOT NULL,PRIMARY KEY(environment,id));
+ INSERT OR IGNORE INTO sandbox_entities SELECT scenario,id,payload FROM sandbox_state;
  CREATE TABLE IF NOT EXISTS oauth_states(state_hash BLOB PRIMARY KEY,payload BLOB NOT NULL,expires_unix INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS memories(id TEXT PRIMARY KEY,source TEXT NOT NULL,text TEXT NOT NULL,created_at TEXT NOT NULL);`)
 	if err != nil {
@@ -266,8 +268,8 @@ func (s *Store) Transition(ctx context.Context, from ads.ChangeState, c ads.Chan
 	}
 	return tx.Commit()
 }
-func (s *Store) FixtureEntities(ctx context.Context) ([]ads.Entity, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT payload FROM fixture_state ORDER BY id")
+func (s *Store) SandboxEntities(ctx context.Context, environment string) ([]ads.Entity, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT payload FROM sandbox_entities WHERE environment=? ORDER BY id", environment)
 	if err != nil {
 		return nil, err
 	}
@@ -286,11 +288,11 @@ func (s *Store) FixtureEntities(ctx context.Context) ([]ads.Entity, error) {
 	}
 	return out, rows.Err()
 }
-func (s *Store) SaveFixture(ctx context.Context, e ads.Entity) error {
+func (s *Store) SaveSandbox(ctx context.Context, environment string, e ads.Entity) error {
 	b, err := json.Marshal(e)
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, "INSERT INTO fixture_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload", e.ID, b)
+	_, err = s.db.ExecContext(ctx, "INSERT INTO sandbox_entities VALUES(?,?,?) ON CONFLICT(environment,id) DO UPDATE SET payload=excluded.payload", environment, e.ID, b)
 	return err
 }

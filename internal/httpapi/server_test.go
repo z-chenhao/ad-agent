@@ -19,12 +19,12 @@ import (
 type testRuntime struct{}
 
 func (testRuntime) Run(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
-	h.Emit(ar.Event{Type: "text.delta", Text: "fixture account read"})
+	h.Emit(ar.Event{Type: "text.delta", Text: "sandbox account read"})
 	result := h.Execute(ctx, ar.Call{ID: "get", Name: "get_advertiser_context", Arguments: json.RawMessage(`{}`), Round: 1})
 	if !result.OK {
 		return ar.Result{}, context.Canceled
 	}
-	return ar.Result{Text: "fixture account read", Stop: "stop"}, nil
+	return ar.Result{Text: "sandbox account read", Stop: "stop"}, nil
 }
 func setup(t *testing.T) (*Server, *httptest.Server, *http.Client, string) {
 	t.Helper()
@@ -53,6 +53,35 @@ func setup(t *testing.T) (*Server, *httptest.Server, *http.Client, string) {
 		t.Fatal(e)
 	}
 	return s, ts, client, string(b)
+}
+
+func setupPortfolio(t *testing.T) (*Server, *httptest.Server, *http.Client, string) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	a, err := app.OpenPortfolioSandboxRuntime(dir, "web_portfolio", testRuntime{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { a.Store.Close() })
+	ts := httptest.NewUnstartedServer(nil)
+	origin := "http://" + ts.Listener.Addr().String()
+	server, err := NewPortfolio(a, origin, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts.Config.Handler = server.Handler()
+	ts.Start()
+	t.Cleanup(ts.Close)
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar}
+	key, err := os.ReadFile(filepath.Join(dir, "operator-key"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return server, ts, client, string(key)
 }
 func request(t *testing.T, c *http.Client, method, url, origin, csrf string, body any) (int, []byte) {
 	t.Helper()
@@ -125,7 +154,7 @@ func TestAuthOriginCSRFAndPublicSurface(t *testing.T) {
 	if code != 400 {
 		t.Fatal("unsupported model accepted", code)
 	}
-	code, b = request(t, c, "POST", ts.URL+"/api/v1/agent/turn", ts.URL, auth.CSRF, map[string]string{"session_id": "web", "message": "read fixture account"})
+	code, b = request(t, c, "POST", ts.URL+"/api/v1/agent/turn", ts.URL, auth.CSRF, map[string]string{"session_id": "web", "message": "read sandbox account"})
 	if code != 200 || !strings.Contains(string(b), "turn.completed") || !strings.Contains(string(b), "text.delta") {
 		t.Fatal("SSE missing lifecycle", code, string(b))
 	}
@@ -166,6 +195,44 @@ func TestTurnReplayIsSessionScoped(t *testing.T) {
 	code, _ = request(t, c, "GET", ts.URL+"/api/v1/turns/"+turn+"/events?session_id=two", "", "", nil)
 	if code != 404 {
 		t.Fatal("cross-session replay")
+	}
+}
+
+func TestPortfolioSurfaceIsScopedAndAuthenticated(t *testing.T) {
+	_, ts, client, key := setupPortfolio(t)
+	code, _ := request(t, client, "GET", ts.URL+"/api/v1/portfolio", "", "", nil)
+	if code != http.StatusUnauthorized {
+		t.Fatal("unauthenticated portfolio access", code)
+	}
+	code, body := request(t, client, "POST", ts.URL+"/api/v1/login", ts.URL, "", map[string]string{"key": key})
+	if code != http.StatusOK {
+		t.Fatal("portfolio login failed", code, string(body))
+	}
+	var auth struct {
+		CSRF string `json:"csrf"`
+	}
+	if err := json.Unmarshal(body, &auth); err != nil {
+		t.Fatal(err)
+	}
+	code, body = request(t, client, "GET", ts.URL+"/api/v1/config", "", "", nil)
+	if code != http.StatusOK || !strings.Contains(string(body), `"mode":"portfolio"`) || strings.Contains(string(body), "agency") {
+		t.Fatal("portfolio config missing or mislabeled", code, string(body))
+	}
+	code, body = request(t, client, "GET", ts.URL+"/api/v1/portfolio", "", "", nil)
+	if code != http.StatusOK || strings.Count(string(body), `"account_id"`) < 3 || !strings.Contains(string(body), "Northstar Apps") {
+		t.Fatal("portfolio accounts missing", code, string(body))
+	}
+	code, body = request(t, client, "GET", ts.URL+"/api/v1/portfolio/report?start_date=2022-07-11&end_date=2022-07-17", "", "", nil)
+	if code != http.StatusOK || !strings.Contains(string(body), "no cross-currency total") {
+		t.Fatal("portfolio report semantics missing", code, string(body))
+	}
+	code, _ = request(t, client, "POST", ts.URL+"/api/v1/changes/not-real/apply", ts.URL, auth.CSRF, map[string]string{"session_id": "web", "operator": "attacker"})
+	if code != http.StatusBadRequest {
+		t.Fatal("portfolio identity override accepted", code)
+	}
+	code, _ = request(t, client, "GET", ts.URL+"/api/v1/advertisers/current", "", "", nil)
+	if code != http.StatusNotFound {
+		t.Fatal("single advertiser route exposed in portfolio mode", code)
 	}
 }
 

@@ -7,12 +7,12 @@ import (
 )
 
 func TestSkillManifestExposesOnlyActiveSkills(t *testing.T) {
-	skills, err := loadSkillRegistry()
+	skills, err := loadSkillRegistry(true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(skills.names()) != 9 {
-		t.Fatalf("active skills = %d, want 9", len(skills.names()))
+	if len(skills.names()) != 10 {
+		t.Fatalf("active skills = %d, want 10", len(skills.names()))
 	}
 	if _, ok := skills.get("measurement-and-attribution"); ok {
 		t.Fatal("staged skill became runtime-visible")
@@ -20,7 +20,17 @@ func TestSkillManifestExposesOnlyActiveSkills(t *testing.T) {
 	if _, ok := skills.get("daily-account-briefing"); !ok {
 		t.Fatal("active skill is not loadable")
 	}
-	registry, err := newRegistry(false, skills.names())
+	withoutCreator, err := loadSkillRegistry(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(withoutCreator.names()) != 9 {
+		t.Fatalf("non-creator skills = %d, want 9", len(withoutCreator.names()))
+	}
+	if _, ok := withoutCreator.get("sandbox-lifecycle"); ok {
+		t.Fatal("creator-only skill became available without Creator")
+	}
+	registry, err := newRegistry(false, skills.names(), true)
 	if err != nil {
 		t.Fatal(err)
 	}

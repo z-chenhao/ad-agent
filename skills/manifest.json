@@ -104,6 +104,21 @@
       ]
     },
     {
+      "name": "sandbox-lifecycle",
+      "status": "active",
+      "description": "Creating and verifying fictional campaign, ad-group, and ad objects inside one isolated Sandbox AdBackend environment through approval-gated drafts.",
+      "official_api_areas": ["Campaign Creation", "Adgroup", "Ad"],
+      "required_tools": [
+        "get_advertiser_context",
+        "list_campaigns",
+        "list_ad_groups",
+        "list_ads",
+        "get_entity",
+        "stage_entity_create",
+        "present_change_preview"
+      ]
+    },
+    {
       "name": "campaign-building",
       "status": "staged",
       "description": "Planning and staging objective-specific campaigns, ad groups, ads, schedules, placements, bids, and validation prerequisites.",

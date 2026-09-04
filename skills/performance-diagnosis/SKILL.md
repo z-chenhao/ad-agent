@@ -5,16 +5,45 @@ description: Explaining a performance movement through bounded period comparison
 
 # Performance diagnosis
 
-Read the account context. For fixture data use its historical latest_date as the
-anchor; disclose this explicitly. Fetch equal recent and previous reporting
-windows at the same level and scope. Never sum different hierarchy levels.
+Diagnose a specified movement by progressively localizing it. Never begin with a
+favorite explanation such as creative fatigue, targeting, or budget.
 
-Use run_analysis with current-turn dataset references for rankings, comparisons,
-contributions, and counter-evidence. The analyst must use server calculations and
-submit_analysis. Distinguish exact contribution from causation. Report missing
-revenue, zero spend, incomplete dates, and attribution uncertainty. Present the
-server evidence record, then state the decision-relevant finding and a limitation.
+## Establish comparable evidence
 
-For a suspected cause, check whether timing, affected level, and metric path align.
-Label the result as a finding, a lead, or not visible in the available data. The
-official Reporting API provides observations; it does not itself establish causality.
+Read advertiser context and anchor local-sandbox dates to its historical
+`latest_date`. Fetch equal recent and previous windows with the same source, level,
+scope, currency, timezone, metric definitions, and attribution basis. Reject complete
+ranking claims when either window is partial. Do not compare a full week with a partial
+day or mix attribution windows.
+
+## Diagnostic tree
+
+1. **Magnitude:** quantify absolute and relative change in spend, impressions, clicks,
+   conversions, and value where present.
+2. **Funnel localization:** determine whether movement first appears in delivery,
+   traffic efficiency, conversion efficiency, or value per conversion. Preserve the
+   correct denominator for every ratio.
+3. **Contribution:** use `run_analysis` with current-turn dataset handles to identify
+   which same-level objects mathematically contributed to the account movement.
+4. **Counter-evidence:** look for important objects that moved in the opposite direction
+   or for volume too low to support a stable ratio.
+5. **Operational context:** check known status and pending changes. Mark schedule,
+   learning phase, review, bid, targeting, creative content, and event health as unknown
+   unless a typed tool returned them.
+
+TikTok describes learning as a volatile calibration period and warns that pauses and
+material edits can affect it, but the current tools cannot observe learning status:
+https://ads.tiktok.com/help/article/learning-phase?lang=en
+
+## Evidence labels
+
+- **Finding:** directly computed or returned by a complete compatible dataset.
+- **Lead:** timing and metric path are consistent, but a required causal variable is
+  unavailable.
+- **Not supported:** available evidence contradicts the hypothesis.
+- **Not visible:** the required field or source is absent.
+
+Require the analysis delegate to use server calculations and `submit_analysis`.
+Present the trusted evidence record first, followed by the decision-relevant finding,
+counter-evidence, limitation, and next discriminating read or test. Contribution is not
+causation and platform attribution is not incrementality.

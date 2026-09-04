@@ -17,7 +17,7 @@ type registry struct {
 	schemas map[string]*jsonschema.Schema
 }
 
-func newRegistry(child bool, skillNames []string) (registry, error) {
+func newRegistry(child bool, skillNames []string, canCreate ...bool) (registry, error) {
 	name := "tools.json"
 	if child {
 		name = "analysis-tools.json"
@@ -29,6 +29,15 @@ func newRegistry(child bool, skillNames []string) (registry, error) {
 	r := registry{schemas: map[string]*jsonschema.Schema{}}
 	if err = json.Unmarshal(b, &r.tools); err != nil {
 		return r, err
+	}
+	if !child && (len(canCreate) == 0 || !canCreate[0]) {
+		filtered := r.tools[:0]
+		for _, tool := range r.tools {
+			if tool.Name != "stage_entity_create" {
+				filtered = append(filtered, tool)
+			}
+		}
+		r.tools = filtered
 	}
 	if !child {
 		for i := range r.tools {

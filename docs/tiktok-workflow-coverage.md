@@ -30,6 +30,7 @@ wide agent that hallucinates capabilities from API documentation.
 | Delivery operations              | Active | Investigate and draft enable/disable                                         | Campaign, Adgroup, and Ad status update           | Draft plus approval-gated Backend write                |
 | Creative performance             | Active | Rank ad-level performance and identify investigation leads                   | Ad get; Integrated Reporting; Creative Management | Ad-level data, no asset-detail claims                  |
 | Change governance                | Active | Review, discard, apply, or reconcile drafts                                  | Campaign, Adgroup, and Ad update families         | Host-owned ledger, approval, read-back, reconciliation |
+| Sandbox lifecycle                | Active when `Creator` is composed | Create and verify fictional campaigns, ad groups, and ads | Campaign, Adgroup, and Ad hierarchy | Persistent isolated environment; not TikTok creation evidence |
 | Campaign building                | Staged | Create objective-specific campaign/ad-group/ad drafts                        | Campaign Creation; Adgroup; Ad; Tool              | Requires typed prerequisites and bundle draft          |
 | Targeting and audiences          | Staged | Review targeting, overlap, custom/saved audiences, and lookalikes            | Audience; Recommend Tool; Tool                    | Requires audience and targeting readers                |
 | Creative and identity operations | Staged | Reuse assets, inspect identities/review, and prepare creative drafts         | Creative Management; File; Identity; Ad ACO       | Requires asset/review readers and drafts               |
@@ -109,6 +110,8 @@ not be disguised as conventional auction objects.
 - `load_skill` accepts only manifest entries marked active.
 - A staged skill remains source-visible to engineers but invisible to the model.
 - Every active skill must reference only installed tool names.
+- A creator-dependent active skill is omitted when the composed backend does not expose
+  that capability; TikTok sessions therefore cannot load `sandbox-lifecycle`.
 - A change request that is executable attempts staging in the same turn; staging never
   implies approval.
 - Unsupported work returns the missing typed capability, not a retry suggestion and not
@@ -123,11 +126,11 @@ of every performance and optimization conclusion without creating spend. Impleme
 this order:
 
 1. `list_event_sources` and `get_event_stats` domain contracts;
-2. deterministic fixture cases for healthy, silent, delayed, partial, and unauthorized
-   sources;
+2. persistent local-sandbox event-source state plus test-only failure injection for
+   healthy, silent, delayed, partial, and unauthorized behavior;
 3. TikTok pixel/app/offline adapters and HTTP wire tests;
 4. agent and React evidence cards;
-5. sandbox or controlled-account reconciliation;
+5. TikTok-platform-sandbox or controlled-account reconciliation;
 6. activate `measurement-and-attribution` in the manifest.
 
 After measurement, implement creative/identity reads, then audience/targeting reads,
@@ -142,3 +145,12 @@ scheduled according to the actual advertiser's business model.
 - model-authorized publishing, deletion, payment, transfer, or permission changes;
 - automatic campaign optimization or scheduled autonomous writes;
 - claiming a staged skill is available merely because TikTok documents its endpoint.
+
+## Professional-knowledge review
+
+The active skills contain evidence prerequisites, funnel and dependency diagnostics,
+metric-denominator rules, explicit unknown states, mutation boundaries, and output
+contracts. TikTok-specific facts come from official sources. High-adoption external
+skills were reviewed for organization and decision-workflow patterns, not copied as
+authority. See [`skill-research.md`](skill-research.md) for sources, adoption snapshots,
+accepted patterns, and rejected claims.

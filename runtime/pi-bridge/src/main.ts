@@ -38,8 +38,36 @@ async function run(req: Start) {
     allowModelNetwork: false,
     signal: AbortSignal.timeout(10_000),
   });
+  if (req.model.auth_mode === "api_key") {
+    const apiKey = process.env[req.model.api_key_env!];
+    if (!apiKey) throw new Error("api_key_missing");
+    runtime.registerProvider(req.model.provider, {
+      name: req.model.provider,
+      baseUrl: req.model.base_url!,
+      apiKey: `$${req.model.api_key_env!}`,
+      api: req.model.api!,
+      models: [
+        {
+          id: req.model.model,
+          name: req.model.model,
+          reasoning: true,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: req.model.context_window!,
+          maxTokens: req.model.max_output_tokens!,
+        },
+      ],
+    });
+    await runtime.setRuntimeApiKey(req.model.provider, apiKey, {
+      signal: AbortSignal.timeout(10_000),
+    });
+  }
   const model = runtime.getModel(req.model.provider, req.model.model);
-  if (!model || !runtime.isUsingOAuth(req.model.provider))
+  if (
+    !model ||
+    (req.model.auth_mode === "chatgpt_oauth" &&
+      !runtime.isUsingOAuth(req.model.provider))
+  )
     throw new Error("oauth_or_model_missing");
   const resources: ResourceLoader = {
     getExtensions: () => ({

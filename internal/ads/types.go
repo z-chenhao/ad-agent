@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -161,6 +162,61 @@ type WriteOutcome struct {
 // Writer is only supplied to the host change service, never to an agent runtime.
 type Writer interface {
 	Write(context.Context, WriteRequest) WriteOutcome
+}
+
+// CreateRequest is an experimental lifecycle seam. Unlike budget/status writes,
+// creation has no pre-existing target and therefore is not yet part of Backend.
+type CreateRequest struct {
+	Level      Level            `json:"level"`
+	ParentID   string           `json:"parent_id,omitempty"`
+	Name       string           `json:"name"`
+	Status     string           `json:"status"`
+	Budget     *decimal.Decimal `json:"budget,omitempty"`
+	BudgetMode string           `json:"budget_mode,omitempty"`
+	Objective  string           `json:"objective,omitempty"`
+}
+
+// Validate checks the small cross-backend lifecycle vocabulary currently
+// understood by the host. Platform-specific create fields remain private to
+// the adapter that eventually implements them.
+func (r CreateRequest) Validate() error {
+	if r.Level != Campaign && r.Level != AdGroup && r.Level != Ad {
+		return errors.New("invalid create level")
+	}
+	if strings.TrimSpace(r.Name) == "" || len(r.Name) > 512 {
+		return errors.New("invalid create name")
+	}
+	if r.Status != "ENABLE" && r.Status != "DISABLE" {
+		return errors.New("invalid create status")
+	}
+	if r.Budget != nil && r.Budget.IsNegative() {
+		return errors.New("negative create budget")
+	}
+	if (r.Budget == nil) != (r.BudgetMode == "") {
+		return errors.New("create budget and mode must be supplied together")
+	}
+	switch r.Level {
+	case Campaign:
+		if r.ParentID != "" {
+			return errors.New("campaign cannot have a parent")
+		}
+	case AdGroup:
+		if r.ParentID == "" || r.Objective != "" {
+			return errors.New("invalid ad group create fields")
+		}
+	case Ad:
+		if r.ParentID == "" || r.Budget != nil || r.BudgetMode != "" || r.Objective != "" {
+			return errors.New("invalid ad create fields")
+		}
+	}
+	return nil
+}
+
+// Creator is implemented by lifecycle-capable environments such as the local
+// sandbox. It stays experimental until a real TikTok create workflow earns a
+// cross-backend contract and live-platform evidence.
+type Creator interface {
+	Create(context.Context, CreateRequest) (Entity, error)
 }
 
 // Backend is the complete advertising-system adapter. Capability slicing keeps

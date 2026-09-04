@@ -11,6 +11,7 @@ type ChangeKind string
 const (
 	BudgetChange ChangeKind = "budget"
 	StatusChange ChangeKind = "status"
+	CreateChange ChangeKind = "create"
 )
 
 func CanTransition(from, to ChangeState) bool {
@@ -38,23 +39,26 @@ const (
 )
 
 type Change struct {
-	ID              string        `json:"id"`
-	SessionID       string        `json:"session_id"`
-	Source          Source        `json:"source"`
-	Kind            ChangeKind    `json:"kind"`
-	Before          Entity        `json:"before"`
-	After           Entity        `json:"after"`
-	State           ChangeState   `json:"state"`
-	Reason          string        `json:"reason"`
-	Currency        string        `json:"currency"`
-	SpendIncreasing bool          `json:"spend_increasing"`
-	CreatedAt       time.Time     `json:"created_at"`
-	ExpiresAt       time.Time     `json:"expires_at"`
-	ApprovedAt      *time.Time    `json:"approved_at,omitempty"`
-	ApprovedBy      string        `json:"approved_by,omitempty"`
-	AttemptID       string        `json:"attempt_id,omitempty"`
-	Outcome         *WriteOutcome `json:"outcome,omitempty"`
-	Note            string        `json:"note,omitempty"`
+	ID              string         `json:"id"`
+	SessionID       string         `json:"session_id"`
+	Source          Source         `json:"source"`
+	Kind            ChangeKind     `json:"kind"`
+	Before          *Entity        `json:"before,omitempty"`
+	After           *Entity        `json:"after,omitempty"`
+	Parent          *Entity        `json:"parent,omitempty"`
+	Create          *CreateRequest `json:"create,omitempty"`
+	Created         *Entity        `json:"created,omitempty"`
+	State           ChangeState    `json:"state"`
+	Reason          string         `json:"reason"`
+	Currency        string         `json:"currency"`
+	SpendIncreasing bool           `json:"spend_increasing"`
+	CreatedAt       time.Time      `json:"created_at"`
+	ExpiresAt       time.Time      `json:"expires_at"`
+	ApprovedAt      *time.Time     `json:"approved_at,omitempty"`
+	ApprovedBy      string         `json:"approved_by,omitempty"`
+	AttemptID       string         `json:"attempt_id,omitempty"`
+	Outcome         *WriteOutcome  `json:"outcome,omitempty"`
+	Note            string         `json:"note,omitempty"`
 }
 
 // Policy is host configuration, never supplied by the model or a change preview.
@@ -63,7 +67,7 @@ type Policy struct {
 	LiveWrites                            bool
 }
 
-func FixturePolicy() Policy {
+func SandboxPolicy() Policy {
 	return Policy{MaxBudget: decimal.NewFromInt(500), MaxDeltaPercent: decimal.NewFromInt(20), MinBudget: decimal.NewFromInt(1)}
 }
 

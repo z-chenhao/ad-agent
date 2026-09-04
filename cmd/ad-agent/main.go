@@ -36,16 +36,22 @@ func main() {
 }
 func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "Ad Agent — local advertising operations and approvals\nCommands: chat, inspect, report, changes, approve, discard, reconcile, serve, oauth-start, oauth-callback\nDefault source: fictional fixture data; no live TikTok request or write is made.\nExample: ad-agent chat --message 'Which campaign contributed most to the latest ROAS change?'\nUse --help with any command for options.")
+		fmt.Fprintln(out, "Ad Agent — local advertising operations and approvals\nCommands: chat, inspect, report, changes, approve, discard, reconcile, serve, oauth-start, oauth-callback\nDefault source: fictional local sandbox data; no TikTok request or write is made.\nExample: ad-agent chat --message 'Which campaign contributed most to the latest ROAS change?'\nUse --help with any command for options.")
 		return nil
 	}
 	command := args[0]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(out)
 	root := fs.String("root", ".", "project root containing the built runtime bridges")
-	runtimeName := fs.String("runtime", "pi", "agent runtime: pi or j; do not switch within a session")
-	provider := fs.String("provider", ar.CodexProvider, "model provider; currently openai-codex")
+	runtimeName := fs.String("runtime", "pi", "agent runtime: pi, j, or claude; do not switch within a session")
+	provider := fs.String("provider", ar.CodexProvider, "model provider ID")
 	model := fs.String("model", ar.DefaultModel, "model ID; use --help or the Web capability panel for supported models")
+	modelAuth := fs.String("model-auth", ar.ChatGPTOAuth, "model authentication: chatgpt_oauth or api_key")
+	modelAPI := fs.String("model-api", "", "direct HTTP protocol: anthropic-messages, openai-responses, or openai-completions")
+	modelBaseURL := fs.String("model-base-url", "", "direct model HTTPS base URL (loopback HTTP is allowed)")
+	modelAPIKeyEnv := fs.String("model-api-key-env", "", "environment variable containing the direct model API key")
+	modelContextWindow := fs.Int("model-context-window", 128000, "direct model context window")
+	modelMaxOutput := fs.Int("model-max-output-tokens", 16384, "direct model maximum output tokens")
 	data := fs.String("data-dir", ".data", "private local state directory with mode 0700")
 	session := fs.String("session", "local", "session ID")
 	message := fs.String("message", "", "single-turn message; omit for interactive mode")
@@ -58,7 +64,9 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	end := fs.String("end", "2022-07-17", "inclusive end date")
 	id := fs.String("id", "", "exact entity or change ID")
 	addr := fs.String("addr", "127.0.0.1:8080", "loopback Web address; port 3000 is reserved for OAuth callback")
-	backendName := fs.String("backend", "fixture", "fixture or tiktok; tiktok is read-only")
+	backendName := fs.String("backend", "sandbox", "sandbox or tiktok; TikTok writes require explicit enablement")
+	scopeName := fs.String("scope", "single_advertiser", "operation scope: single_advertiser or portfolio")
+	sandboxEnvironment := fs.String("sandbox-environment", "default", "isolated persistent local sandbox environment ID")
 	tiktokAdvertiser := fs.String("tiktok-advertiser", "", "bound TikTok advertiser ID")
 	tiktokEnvironment := fs.String("tiktok-environment", "sandbox", "TikTok environment: sandbox or live")
 	tiktokBaseURL := fs.String("tiktok-base-url", tiktokmapi.DefaultBaseURL, "TikTok MAPI HTTPS base URL")
@@ -78,6 +86,9 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	if fs.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
 	}
+	if *scopeName != "single_advertiser" && *scopeName != "portfolio" {
+		return errors.New("scope must be single_advertiser or portfolio")
+	}
 	switch command {
 	case "chat", "inspect", "report", "changes", "approve", "discard", "reconcile", "serve", "oauth-start", "oauth-callback":
 	default:
@@ -88,6 +99,9 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return e
 	}
 	if command == "oauth-callback" {
+		if *scopeName != "single_advertiser" {
+			return errors.New("TikTok OAuth setup is account-bound and requires --scope single_advertiser")
+		}
 		if *addr != "127.0.0.1:3000" {
 			return errors.New("oauth-callback requires --addr 127.0.0.1:3000")
 		}
@@ -127,6 +141,9 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return err
 	}
 	if command == "oauth-start" {
+		if *scopeName != "single_advertiser" {
+			return errors.New("TikTok OAuth setup is account-bound and requires --scope single_advertiser")
+		}
 		if *redirectURL == "" || *authorizationURL == "" {
 			return errors.New("oauth-start requires --redirect-url and the URL copied from TikTok My Apps in --authorization-url")
 		}
@@ -150,19 +167,53 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		fmt.Fprintln(out, prepared)
 		return nil
 	}
+	selection := ar.ModelSelection{Provider: *provider, Model: *model, Reasoning: "medium", AuthMode: *modelAuth}
+	if *modelAuth == ar.APIKeyAuth {
+		selection.API = *modelAPI
+		selection.BaseURL = *modelBaseURL
+		selection.APIKeyEnv = *modelAPIKeyEnv
+		selection.ContextWindow = *modelContextWindow
+		selection.MaxOutputTokens = *modelMaxOutput
+	}
+	selection, e = ar.NormalizeModel(selection)
+	if e != nil {
+		return e
+	}
 	var selectedRuntime ar.Runtime
 	switch *runtimeName {
 	case "pi":
 		selectedRuntime = ar.Pi{Entry: filepath.Join(absolute, "runtime", "pi-bridge", "dist", "main.js")}
 	case "j":
 		selectedRuntime = ar.J{Entry: filepath.Join(absolute, "runtime", "j-model-bridge", "dist", "main.js")}
+	case "claude":
+		if selection.AuthMode != ar.APIKeyAuth || selection.Provider != "anthropic" || selection.API != ar.AnthropicMessages {
+			return errors.New("claude runtime requires --model-auth api_key --provider anthropic --model-api anthropic-messages")
+		}
+		selectedRuntime = ar.Claude{Entry: filepath.Join(absolute, "runtime", "claude-bridge", "dist", "main.js")}
 	default:
-		return errors.New("runtime must be pi or j")
+		return errors.New("runtime must be pi, j, or claude")
+	}
+	if *scopeName == "portfolio" {
+		if *backendName != "sandbox" {
+			return errors.New("portfolio scope currently requires --backend sandbox; live portfolios need explicit account bindings")
+		}
+		portfolioApp, err := app.OpenPortfolioSandboxRuntime(*data, *sandboxEnvironment, selectedRuntime)
+		if err != nil {
+			return err
+		}
+		defer portfolioApp.Store.Close()
+		if err = portfolioApp.Host.ConfigureModel(selection); err != nil {
+			return err
+		}
+		return runPortfolio(ctx, command, portfolioApp, absolute, *addr, *session, *message, *start, *end, *id, *asJSON, *events, selection, in, out)
 	}
 	var a *app.App
-	if *backendName == "fixture" {
-		a, e = app.OpenRuntime(*data, selectedRuntime)
+	if *backendName == "sandbox" {
+		a, e = app.OpenSandboxRuntime(*data, *sandboxEnvironment, selectedRuntime)
 	} else if *backendName == "tiktok" {
+		if *sandboxEnvironment != "default" {
+			return errors.New("sandbox-environment requires --backend sandbox")
+		}
 		if *tiktokAdvertiser == "" {
 			return errors.New("tiktok backend requires --tiktok-advertiser")
 		}
@@ -191,13 +242,12 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			a, e = app.OpenBackendRuntime(*data, realBackend, selectedRuntime)
 		}
 	} else {
-		return errors.New("backend must be fixture or tiktok")
+		return errors.New("backend must be sandbox or tiktok")
 	}
 	if e != nil {
 		return e
 	}
 	defer a.Store.Close()
-	selection := ar.ModelSelection{Provider: *provider, Model: *model, Reasoning: "medium"}
 	if err := a.Host.ConfigureModel(selection); err != nil {
 		return err
 	}
@@ -341,4 +391,131 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		}
 	}
 	return scan.Err()
+}
+
+func runPortfolio(ctx context.Context, command string, a *app.PortfolioApp, root, addr, session, message, start, end, id string, asJSON, events bool, selection ar.ModelSelection, in io.Reader, out io.Writer) error {
+	encode := func(v any) error {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(v)
+	}
+	switch command {
+	case "serve":
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil || port == "3000" || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
+			return errors.New("serve requires a loopback IP and a port other than 3000")
+		}
+		origin := "http://" + addr
+		handler, err := httpapi.NewPortfolio(a, origin, filepath.Join(root, "web", "dist"))
+		if err != nil {
+			return err
+		}
+		server := &http.Server{Addr: addr, Handler: handler.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
+		fmt.Fprintf(out, "Ad Agent: %s\nScope: portfolio; sandbox: %s; accounts: 3; runtime: %s; model: %s/%s.\nApproval remains a separate host action. The operator key is stored at %s.\n", origin, a.Scope.ID, a.Runtime, selection.Provider, selection.Model, filepath.Join(a.Store.Dir, "operator-key"))
+		go func() {
+			<-ctx.Done()
+			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = server.Shutdown(stopCtx)
+		}()
+		err = server.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case "inspect":
+		value, err := a.Scope.Accounts(ctx)
+		if err != nil {
+			return err
+		}
+		return encode(value)
+	case "report":
+		value, err := a.Scope.Performance(ctx, start, end)
+		if err != nil {
+			return err
+		}
+		return encode(value)
+	case "changes":
+		value, err := a.Store.Changes(ctx, session)
+		if err != nil {
+			return err
+		}
+		return encode(value)
+	case "approve", "discard", "reconcile":
+		if id == "" {
+			return fmt.Errorf("%s requires --id", command)
+		}
+		var value ads.Change
+		var err error
+		switch command {
+		case "approve":
+			value, err = a.Scope.Apply(ctx, session, id, "local-cli-operator")
+		case "discard":
+			value, err = a.Scope.Discard(ctx, session, id)
+		case "reconcile":
+			value, err = a.Scope.Reconcile(ctx, session, id)
+		}
+		if err != nil {
+			return err
+		}
+		return encode(value)
+	}
+	chat := func(text string) error {
+		var emit func(store.Event)
+		if events {
+			enc := json.NewEncoder(out)
+			emit = func(event store.Event) { _ = enc.Encode(event) }
+		} else if !asJSON {
+			emit = func(event store.Event) {
+				if event.Type != "text.delta" {
+					return
+				}
+				var value struct {
+					Text string `json:"text"`
+				}
+				if json.Unmarshal(event.Data, &value) == nil {
+					fmt.Fprint(out, value.Text)
+				}
+			}
+		}
+		result, err := a.Host.RunWithModel(ctx, session, text, selection, emit)
+		if asJSON && !events {
+			if encodeErr := encode(result); encodeErr != nil {
+				return encodeErr
+			}
+		} else if !events {
+			fmt.Fprintf(out, "\n[%s · %d ms · portfolio sandbox]\n", result.Status, result.ElapsedMS)
+		}
+		return err
+	}
+	if message != "" {
+		return chat(message)
+	}
+	if !asJSON && !events {
+		fmt.Fprintf(out, "Ad Agent / portfolio / sandbox / %s\nEnter /exit to quit. Every advertiser change requires separate approval.\n", selection.Model)
+	}
+	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 4096), 16001)
+	for {
+		if !asJSON && !events {
+			fmt.Fprint(out, "you > ")
+		}
+		if !scanner.Scan() {
+			break
+		}
+		text := strings.TrimSpace(scanner.Text())
+		if text == "/exit" {
+			break
+		}
+		if text == "" {
+			continue
+		}
+		if err := chat(text); err != nil {
+			fmt.Fprintln(out, "turn failed:", err)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return scanner.Err()
 }

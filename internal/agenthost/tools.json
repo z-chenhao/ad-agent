@@ -1,7 +1,7 @@
 [
   {
     "name": "get_advertiser_context",
-    "description": "Read the bound account, currency, timezone, fixture anchor date, and limitations.",
+    "description": "Read the bound account, currency, timezone, local-sandbox anchor date, and limitations.",
     "parameters": {
       "type": "object",
       "properties": {},
@@ -186,6 +186,25 @@
         }
       },
       "required": ["level", "id", "status", "reason"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "stage_entity_create",
+    "description": "Create an approval-gated campaign, ad group, or ad draft in a lifecycle-capable environment. Read the parent first for ad groups and ads. Nothing is created until explicit approval.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "level": { "type": "string", "enum": ["campaign", "ad_group", "ad"] },
+        "parent_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "status": { "type": "string", "enum": ["ENABLE", "DISABLE"] },
+        "budget": { "type": "string", "pattern": "^\\d{1,9}(\\.\\d{1,2})?$" },
+        "budget_mode": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "objective": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 600 }
+      },
+      "required": ["level", "name", "status", "reason"],
       "additionalProperties": false
     }
   },

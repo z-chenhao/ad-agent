@@ -1,8 +1,9 @@
-package fixture
+package sandbox
 
 import (
 	"context"
 	"encoding/json"
+	"github.com/shopspring/decimal"
 	"github.com/z-chenhao/ad-agent/internal/ads"
 	"testing"
 )
@@ -20,7 +21,7 @@ func TestHierarchyRollups(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !r.Complete {
-			t.Fatal("incomplete fixture")
+			t.Fatal("incomplete sandbox")
 		}
 		if !r.Totals.Spend.Equal(mustDecimal("21")) || r.Totals.Revenue == nil || !r.Totals.Revenue.Equal(mustDecimal("35")) {
 			t.Fatalf("bad sums at %s: %+v", level, r.Totals)
@@ -98,11 +99,11 @@ func TestOfficialExampleFieldsArePreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 	if entity.AccountID != original.Campaign.AdvertiserID || entity.Name != original.Campaign.Name || entity.Budget.IntPart() != original.Campaign.Budget || entity.BudgetMode != original.Campaign.Mode || entity.Objective != original.Campaign.Objective {
-		t.Fatal("fixture silently changed official request fields")
+		t.Fatal("sandbox silently changed official request fields")
 	}
 }
 func TestMissingDayIsNotZero(t *testing.T) {
-	raw, _ := files.ReadFile("data/mock.json")
+	raw, _ := files.ReadFile("data/environment-seed.json")
 	var doc Document
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
@@ -124,8 +125,8 @@ func TestMissingDayIsNotZero(t *testing.T) {
 		t.Fatal("ranked incomplete report")
 	}
 }
-func TestFixtureRejectsContradictions(t *testing.T) {
-	raw, _ := files.ReadFile("data/mock.json")
+func TestSandboxRejectsContradictions(t *testing.T) {
+	raw, _ := files.ReadFile("data/environment-seed.json")
 	for _, modify := range []func(*Document){
 		func(d *Document) { d.Ads.Data.List[0].AdvertiserID = "other" },
 		func(d *Document) { d.Ads.Data.List[0].AdGroupID = "missing" },
@@ -138,7 +139,7 @@ func TestFixtureRejectsContradictions(t *testing.T) {
 		modify(&d)
 		b, _ := json.Marshal(d)
 		if _, err := FromJSON(b); err == nil {
-			t.Fatal("accepted inconsistent fixture")
+			t.Fatal("accepted inconsistent sandbox")
 		}
 	}
 	b, _ := New()
@@ -150,4 +151,38 @@ func TestFixtureRejectsContradictions(t *testing.T) {
 	if _, e := b.Account(ctx); e == nil {
 		t.Fatal("cancel ignored")
 	}
+}
+
+func TestCreateEnforcesHierarchyAndLevelFields(t *testing.T) {
+	b, err := NewEnvironment("validation")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if _, err = b.Create(ctx, ads.CreateRequest{Level: ads.Ad, ParentID: "adgroup_example_1", Name: "Invalid budget", Status: "DISABLE", Budget: decimalPtr("10"), BudgetMode: "BUDGET_MODE_DAY"}); err == nil {
+		t.Fatal("ad accepted budget fields")
+	}
+	if _, err = b.Create(ctx, ads.CreateRequest{Level: ads.AdGroup, ParentID: "missing", Name: "Orphan", Status: "DISABLE"}); err == nil {
+		t.Fatal("ad group accepted missing parent")
+	}
+	campaign, err := b.Create(ctx, ads.CreateRequest{Level: ads.Campaign, Name: "Valid", Status: "DISABLE", Objective: "TRAFFIC"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	group, err := b.Create(ctx, ads.CreateRequest{Level: ads.AdGroup, ParentID: campaign.ID, Name: "Valid group", Status: "DISABLE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ad, err := b.Create(ctx, ads.CreateRequest{Level: ads.Ad, ParentID: group.ID, Name: "Valid ad", Status: "DISABLE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := b.Get(ctx, ads.Ad, ad.ID); err != nil || got.ParentID != group.ID {
+		t.Fatalf("created ad=%#v err=%v", got, err)
+	}
+}
+
+func decimalPtr(value string) *decimal.Decimal {
+	v := decimal.RequireFromString(value)
+	return &v
 }

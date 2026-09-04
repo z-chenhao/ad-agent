@@ -34,6 +34,8 @@ import type {
   Report,
   RuntimeConfig,
   ModelSelection,
+  Portfolio,
+  PortfolioReport,
   Session,
 } from "./types";
 import { Badge } from "./components/ui/badge";
@@ -64,16 +66,20 @@ import {
   stateText,
 } from "./components/presentation";
 
-type Page = "home" | "campaigns" | "changes";
+type Page = "home" | "portfolio" | "campaigns" | "changes";
 type ChangeAction = "apply" | "discard" | "reconcile";
 
-const pages: {
+const directPages: {
   id: Page;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
   { id: "home", label: "Home", icon: Gauge },
   { id: "campaigns", label: "Campaigns", icon: LayoutList },
+  { id: "changes", label: "Changes", icon: FileCheck2 },
+];
+const portfolioPages: typeof directPages = [
+  { id: "portfolio", label: "Portfolio", icon: LayoutList },
   { id: "changes", label: "Changes", icon: FileCheck2 },
 ];
 
@@ -96,8 +102,25 @@ const toolNames: Record<string, string> = {
   load_skill: "Load workflow",
   stage_budget_change: "Stage budget change",
   stage_status_change: "Stage status change",
+  stage_entity_create: "Stage object creation",
   get_pending_changes: "Read changes",
+  list_advertisers: "Read advertisers",
+  get_portfolio_performance: "Compare account performance",
+  run_portfolio_analysis: "Delegate portfolio analysis",
+  list_account_entities: "Read account objects",
+  get_account_entity: "Verify account object",
+  stage_account_budget_change: "Stage account budget change",
+  stage_account_status_change: "Stage account status change",
+  stage_account_entity_create: "Stage account object creation",
 };
+
+function modelSelectionKey(
+  model: Pick<ModelSelection, "provider" | "model" | "auth_mode" | "api">,
+) {
+  return [model.provider, model.model, model.auth_mode, model.api ?? ""].join(
+    "|",
+  );
+}
 
 function Login({ onReady }: { onReady: () => void }) {
   const [key, setKey] = useState("");
@@ -122,7 +145,7 @@ function Login({ onReady }: { onReady: () => void }) {
           </p>
         </div>
         <p className="text-xs text-muted-foreground">
-          Single user · local first · ChatGPT OAuth stays on this machine
+          Single user · local first · model credentials stay on this machine
         </p>
       </section>
       <section className="flex items-center justify-center p-6">
@@ -227,6 +250,7 @@ function AssistantPanel({
   onChange,
   onOpenInspector,
   modelLabel,
+  mode,
   onClose,
 }: {
   sessionId: string;
@@ -243,6 +267,7 @@ function AssistantPanel({
   onChange: (change: Change, action: ChangeAction) => void;
   onOpenInspector: () => void;
   modelLabel: string;
+  mode: RuntimeConfig["mode"];
   onClose?: () => void;
 }) {
   const end = useRef<HTMLDivElement>(null);
@@ -263,6 +288,18 @@ function AssistantPanel({
         }
       : card,
   );
+  const suggestions =
+    mode === "portfolio"
+      ? [
+          "Triage the advertiser portfolio and name the next account to inspect.",
+          "Compare account-level performance without combining currencies.",
+          "Show pending changes grouped by advertiser.",
+        ]
+      : [
+          "Give me today's prioritized account briefing.",
+          "Compare the latest seven days with the prior seven days.",
+          "Show campaigns that need delivery attention.",
+        ];
   return (
     <section className="flex h-full min-h-0 flex-col bg-background">
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
@@ -328,11 +365,7 @@ function AssistantPanel({
                 or prepare a reviewable change.
               </p>
               <div className="mt-5 flex flex-col gap-2">
-                {[
-                  "Give me today's prioritized account briefing.",
-                  "Compare the latest seven days with the prior seven days.",
-                  "Show campaigns that need delivery attention.",
-                ].map((text) => (
+                {suggestions.map((text) => (
                   <Button
                     key={text}
                     variant="secondary"
@@ -394,7 +427,7 @@ function AssistantPanel({
           {busy && !live.text && !live.cards.length && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="size-1.5 animate-pulse rounded-full bg-foreground" />
-              Reading the account context…
+              Reading the {mode === "portfolio" ? "portfolio" : "account"} context…
             </div>
           )}
           <div ref={end} />
@@ -491,13 +524,13 @@ function HomeView({
           </Button>
         }
       />
-      {account?.source.backend === "fixture" && (
+      {account?.source.backend === "sandbox" && (
         <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/45 px-4 py-2.5 text-xs">
           <span>
-            <strong>Fixture workspace</strong>
+            <strong>Sandbox workspace</strong>
             <span className="ml-2 text-muted-foreground">
-              Fictional data for end-to-end validation. No live ads are
-              modified.
+              Environment: {account.source.environment}. Persistent fictional
+              state for end-to-end validation; no live ads are modified.
             </span>
           </span>
           <span className="shrink-0 text-muted-foreground">
@@ -612,10 +645,10 @@ function HomeView({
                 >
                   <span className="min-w-0">
                     <strong className="block truncate text-sm font-medium">
-                      {change.before.name}
+                      {change.before?.name ?? change.created?.name ?? change.create?.name ?? "New entity"}
                     </strong>
                     <span className="text-xs text-muted-foreground">
-                      {change.kind === "budget" ? "Budget" : "Delivery status"}
+                      {change.kind === "create" ? "Create" : change.kind === "budget" ? "Budget" : "Delivery status"}
                     </span>
                   </span>
                   <Badge
@@ -633,6 +666,140 @@ function HomeView({
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function PortfolioView({
+  portfolio,
+  report,
+  changes,
+  onAsk,
+  onNavigate,
+}: {
+  portfolio?: Portfolio;
+  report?: PortfolioReport;
+  changes: Change[];
+  onAsk: (text: string) => void;
+  onNavigate: (page: Page) => void;
+}) {
+  const staged = changes.filter((change) => change.state === "staged");
+  return (
+    <div className="space-y-8">
+      <PageHeading
+        eyebrow="Authorized scope"
+        title="Advertiser portfolio"
+        description={`${portfolio?.name ?? "Reading portfolio…"} · ${portfolio?.accounts.length ?? 0} independently scoped accounts`}
+        action={
+          <Button
+            variant="secondary"
+            onClick={() =>
+              onAsk(
+                "Triage this advertiser portfolio. Rank only accounts with comparable evidence, preserve currency and attribution boundaries, and propose the next drill-down.",
+              )
+            }
+          >
+            <Bot />
+            Triage portfolio
+          </Button>
+        }
+      />
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/45 px-4 py-2.5 text-xs">
+        <span>
+          <strong>Portfolio sandbox</strong>
+          <span className="ml-2 text-muted-foreground">
+            Each fictional advertiser has isolated persistent state. Batch
+            requests create independent drafts and never imply approval.
+          </span>
+        </span>
+        {staged.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => onNavigate("changes")}>
+            {staged.length} awaiting review
+          </Button>
+        )}
+      </div>
+      <Card className="overflow-hidden">
+        <CardHeader className="flex-row items-end justify-between">
+          <div>
+            <CardTitle>Account-level performance</CardTitle>
+            <CardDescription className="mt-1">
+              {report?.start_date ?? "—"} — {report?.end_date ?? "—"} · no
+              cross-currency total
+            </CardDescription>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              onAsk(
+                "Identify which advertiser needs attention first, then drill into only that account. Explain missing or non-comparable evidence.",
+              )
+            }
+          >
+            Prioritize
+            <ChevronRight />
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-y border-border bg-muted/35 text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-5 py-3 font-medium">Advertiser</th>
+                  <th className="px-4 py-3 font-medium">Spend</th>
+                  <th className="px-4 py-3 font-medium">ROAS</th>
+                  <th className="px-4 py-3 font-medium">Coverage</th>
+                  <th className="px-5 py-3 text-right font-medium">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {(report?.accounts ?? []).map((item) => (
+                  <tr key={item.account.id}>
+                    <td className="px-5 py-4">
+                      <strong className="block font-medium">{item.account.name}</strong>
+                      <span className="text-xs text-muted-foreground">
+                        {item.account.id} · {item.account.timezone}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 tabular-nums">
+                      {format(item.metrics.spend)} {item.account.currency}
+                    </td>
+                    <td className="px-4 py-4 tabular-nums">
+                      {item.roas == null ? "—" : `${format(item.roas)}×`}
+                    </td>
+                    <td className="px-4 py-4">
+                      <Badge tone={item.complete ? "success" : "warning"}>
+                        {item.complete ? "Complete" : "Limited"}
+                      </Badge>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          onAsk(
+                            `Diagnose advertiser ${item.account.id} (${item.account.name}). Read its campaigns first and keep every proposed change scoped to this advertiser.`,
+                          )
+                        }
+                      >
+                        Diagnose
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!report && (
+              <div className="m-5 h-24 animate-pulse rounded-lg bg-muted" />
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      {report?.limitations.map((limitation) => (
+        <p key={limitation} className="text-xs text-muted-foreground">
+          {limitation}
+        </p>
+      ))}
     </div>
   );
 }
@@ -702,11 +869,14 @@ function PageHeading({
 export function Workspace() {
   const [page, setPage] = useState<Page>("home");
   const [account, setAccount] = useState<Account>();
+  const [portfolio, setPortfolio] = useState<Portfolio>();
+  const [portfolioReport, setPortfolioReport] = useState<PortfolioReport>();
   const [config, setConfig] = useState<RuntimeConfig>();
   const [selectedModel, setSelectedModel] = useState<ModelSelection>(() => ({
     provider: "openai-codex",
     model: localStorage.getItem("ad-agent.model") ?? "gpt-5.6-luna",
     reasoning: "medium",
+    auth_mode: "chatgpt_oauth",
   }));
   const [error, setError] = useState("");
   const [overview, setOverview] = useState<{
@@ -773,27 +943,43 @@ export function Workspace() {
     setMemories(await api<Memory[]>("/memories"));
   useEffect(() => {
     void api<RuntimeConfig>("/config")
-      .then((value) => {
+      .then(async (value) => {
         setConfig(value);
         setSelectedModel((current) =>
           value.model.options.some(
             (candidate) =>
-              candidate.provider === current.provider &&
-              candidate.model === current.model,
+              modelSelectionKey(candidate) === modelSelectionKey(current),
           )
             ? current
             : value.model.default,
         );
-      })
-      .catch((reason) => setError(String(reason)));
-    void api<Account>("/advertisers/current")
-      .then(async (value) => {
-        setAccount(value);
-        const end = new Date(value.latest_date + "T00:00:00Z");
-        end.setUTCDate(end.getUTCDate() - 6);
+        if (value.mode === "portfolio") {
+          setPage("portfolio");
+          const scope = await api<Portfolio>("/portfolio");
+          setPortfolio(scope);
+          const latest = scope.accounts
+            .map((item) => item.latest_date)
+            .filter(Boolean)
+            .sort()
+            .at(-1);
+          if (latest) {
+            const rangeStart = new Date(latest + "T00:00:00Z");
+            rangeStart.setUTCDate(rangeStart.getUTCDate() - 6);
+            setPortfolioReport(
+              await api<PortfolioReport>(
+                `/portfolio/report?start_date=${rangeStart.toISOString().slice(0, 10)}&end_date=${latest}`,
+              ),
+            );
+          }
+          return;
+        }
+        const current = await api<Account>("/advertisers/current");
+        setAccount(current);
+        const rangeStart = new Date(current.latest_date + "T00:00:00Z");
+        rangeStart.setUTCDate(rangeStart.getUTCDate() - 6);
         setOverview(
           await api(
-            `/report?level=campaign&start_date=${end.toISOString().slice(0, 10)}&end_date=${value.latest_date}`,
+            `/report?level=campaign&start_date=${rangeStart.toISOString().slice(0, 10)}&end_date=${current.latest_date}`,
           ),
         );
       })
@@ -803,8 +989,9 @@ export function Workspace() {
     localStorage.setItem("ad-agent.session", sessionId);
     void loadSession().catch((reason) => setError(String(reason)));
     void loadChanges().catch((reason) => setError(String(reason)));
-    void loadMemories().catch((reason) => setError(String(reason)));
-  }, [sessionId]);
+    if (config?.mode === "single_advertiser")
+      void loadMemories().catch((reason) => setError(String(reason)));
+  }, [sessionId, config?.mode]);
   useEffect(() => {
     localStorage.setItem(
       "ad-agent.assistant",
@@ -812,7 +999,7 @@ export function Workspace() {
     );
   }, [assistantOpen]);
   useEffect(() => {
-    if (page === "campaigns")
+    if (page === "campaigns" && config?.mode === "single_advertiser")
       void api<Entity[]>(
         `/entities/${level}?parent_id=${encodeURIComponent(path.at(-1)?.id ?? "")}`,
       )
@@ -854,7 +1041,8 @@ export function Workspace() {
       setController(undefined);
       await loadSession().catch(() => {});
       await loadChanges().catch(() => {});
-      await loadMemories().catch(() => {});
+      if (config?.mode === "single_advertiser")
+        await loadMemories().catch(() => {});
     }
   };
   const ask = (text: string) => {
@@ -896,23 +1084,23 @@ export function Workspace() {
       data: {},
     });
   };
-  const selectModel = (model: string) => {
+  const selectModel = (key: string) => {
     const option = config?.model.options.find(
-      (candidate) => candidate.model === model,
+      (candidate) => modelSelectionKey(candidate) === key,
     );
     if (!option || busy) return;
-    const selection: ModelSelection = { ...option, reasoning: "medium" };
+    const { label: _label, ...configured } = option;
+    const selection: ModelSelection = { ...configured, reasoning: "medium" };
     setSelectedModel(selection);
-    localStorage.setItem("ad-agent.model", model);
+    localStorage.setItem("ad-agent.model", option.model);
     newSession(selection);
   };
   const modelLabel =
     config?.model.options.find(
-      (option) =>
-        option.provider === selectedModel.provider &&
-        option.model === selectedModel.model,
+      (option) => modelSelectionKey(option) === modelSelectionKey(selectedModel),
     )?.label ?? selectedModel.model;
   const pending = changes.filter((change) => change.state === "staged").length;
+  const pages = config?.mode === "portfolio" ? portfolioPages : directPages;
   const pageTitle = pages.find((item) => item.id === page)?.label ?? "Home";
   const assistantProps = {
     sessionId,
@@ -932,6 +1120,7 @@ export function Workspace() {
       setInspectorOpen(true);
     },
     modelLabel,
+    mode: config?.mode ?? "single_advertiser",
   };
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -973,13 +1162,17 @@ export function Workspace() {
               <span className="size-1.5 rounded-full bg-emerald-500" />
               {config?.runtime === "j"
                 ? "J-agent"
+                : config?.runtime === "claude"
+                  ? "Claude Agent SDK"
                 : config?.runtime === "pi"
                   ? "Pi"
                   : "Agent"}{" "}
               + {modelLabel}
             </div>
             <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
-              ChatGPT OAuth · local runtime
+              {selectedModel.auth_mode === "chatgpt_oauth"
+                ? "ChatGPT OAuth"
+                : "Direct HTTP API key"} · local runtime
             </p>
           </div>
         </div>
@@ -1001,8 +1194,10 @@ export function Workspace() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Badge tone="muted">
-              {account?.source.backend === "fixture"
-                ? "Fixture data"
+              {config?.mode === "portfolio"
+                ? `Portfolio · ${portfolio?.id ?? "sandbox"}`
+                : account?.source.backend === "sandbox"
+                ? `Sandbox · ${account.source.environment}`
                 : "Read-only data"}
             </Badge>
             <Button
@@ -1042,6 +1237,15 @@ export function Workspace() {
               <HomeView
                 account={account}
                 overview={overview}
+                changes={changes}
+                onAsk={ask}
+                onNavigate={setPage}
+              />
+            )}
+            {page === "portfolio" && (
+              <PortfolioView
+                portfolio={portfolio}
+                report={portfolioReport}
                 changes={changes}
                 onAsk={ask}
                 onNavigate={setPage}
@@ -1225,23 +1429,22 @@ export function Workspace() {
             </label>
             <select
               id="model-selection"
-              value={selectedModel.model}
+              value={modelSelectionKey(selectedModel)}
               disabled={busy}
               onChange={(event) => selectModel(event.target.value)}
               className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-ring"
             >
               {config?.model.options.map((option) => (
                 <option
-                  key={`${option.provider}/${option.model}`}
-                  value={option.model}
+                  key={modelSelectionKey(option)}
+                  value={modelSelectionKey(option)}
                 >
                   {option.label}
                 </option>
               ))}
             </select>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Provider: {selectedModel.provider}. Changing the model starts a
-              new session so provider checkpoints cannot be mixed.
+              Provider: {selectedModel.provider}. Connection: {selectedModel.auth_mode === "chatgpt_oauth" ? "ChatGPT OAuth" : selectedModel.api}. Changing the model starts a new session so provider checkpoints cannot be mixed.
             </p>
           </div>
           <div className="mt-3 space-y-3">
@@ -1271,7 +1474,9 @@ export function Workspace() {
       <Dialog open={inspectorOpen} onOpenChange={setInspectorOpen}>
         <DialogContent className="right-0 left-auto top-0 h-[100dvh] w-full max-w-md translate-x-0 translate-y-0 rounded-none p-0">
           <div className="border-b border-border px-5 py-4">
-            <DialogTitle>Activity and memory</DialogTitle>
+            <DialogTitle>
+              {config?.mode === "portfolio" ? "Activity" : "Activity and memory"}
+            </DialogTitle>
             <DialogDescription>
               Public execution facts for the latest reply. Private reasoning and
               provider state are never shown.
@@ -1310,7 +1515,7 @@ export function Workspace() {
                   )}
                 </div>
               </section>
-              <section>
+              {config?.mode === "single_advertiser" && <section>
                 <h3 className="text-xs font-semibold uppercase tracking-[.12em] text-muted-foreground">
                   Business memory
                 </h3>
@@ -1343,7 +1548,7 @@ export function Workspace() {
                     </p>
                   )}
                 </div>
-              </section>
+              </section>}
             </div>
           </ScrollArea>
         </DialogContent>
@@ -1361,18 +1566,22 @@ export function Workspace() {
           </DialogDescription>
           {confirm && (
             <div className="mt-5 rounded-lg bg-muted p-4">
-              <div className="text-sm font-medium">{confirm.before.name}</div>
+              <div className="text-sm font-medium">{confirm.before?.name ?? confirm.create?.name ?? "New entity"}</div>
               <div className="mt-3 flex items-center justify-between gap-3 tabular-nums">
                 <span className="text-muted-foreground line-through">
-                  {confirm.kind === "budget"
-                    ? `${format(confirm.before.budget)} ${confirm.currency}`
-                    : confirm.before.status}
+                  {confirm.kind === "create"
+                    ? "Not created"
+                    : confirm.kind === "budget"
+                      ? `${format(confirm.before?.budget)} ${confirm.currency}`
+                      : confirm.before?.status}
                 </span>
                 <ChevronRight className="size-4" />
                 <strong>
-                  {confirm.kind === "budget"
-                    ? `${format(confirm.after.budget)} ${confirm.currency}`
-                    : confirm.after.status}
+                  {confirm.kind === "create"
+                    ? `${confirm.create?.level ?? "entity"} · ${confirm.create?.status ?? "DISABLE"}`
+                    : confirm.kind === "budget"
+                      ? `${format(confirm.after?.budget)} ${confirm.currency}`
+                      : confirm.after?.status}
                 </strong>
               </div>
             </div>

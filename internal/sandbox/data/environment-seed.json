@@ -9,7 +9,7 @@
   "campaigns": {
     "code": 0,
     "message": "OK",
-    "request_id": "fixture_official_shape",
+    "request_id": "sandbox_official_shape",
     "data": {
       "list": [
         {
@@ -44,7 +44,7 @@
   "adgroups": {
     "code": 0,
     "message": "OK",
-    "request_id": "fixture_official_shape",
+    "request_id": "sandbox_official_shape",
     "data": {
       "list": [
         {
@@ -77,7 +77,7 @@
   "ads": {
     "code": 0,
     "message": "OK",
-    "request_id": "fixture_official_shape",
+    "request_id": "sandbox_official_shape",
     "data": {
       "list": [
         {
@@ -124,7 +124,7 @@
   "report": {
     "code": 0,
     "message": "OK",
-    "request_id": "fixture_official_shape",
+    "request_id": "sandbox_official_shape",
     "data": {
       "list": [
         {

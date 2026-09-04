@@ -82,14 +82,14 @@ try {
     noThemes: true,
     noContextFiles: true,
     systemPromptOverride: () =>
-      "You are a readiness probe. Call get_fixture_report exactly once. Then reply with exactly the marker from the tool result. All data is fictional. Do nothing else.",
+      "You are a readiness probe. Call get_sandbox_report exactly once. Then reply with exactly the marker from the tool result. All data is fictional. Do nothing else.",
   });
   await loader.reload();
   const marker = `AD_BACKEND_${randomUUID()}`;
   let calls = 0;
   const tool = {
-    name: "get_fixture_report",
-    label: "Fixture report",
+    name: "get_sandbox_report",
+    label: "Sandbox report",
     description: "Return a tiny fictional report and a readiness marker.",
     parameters: {
       type: "object",
@@ -104,14 +104,14 @@ try {
           {
             type: "text",
             text: JSON.stringify({
-              source: "fixture",
+              source: "sandbox",
               spend: 100,
               revenue: 200,
               marker,
             }),
           },
         ],
-        details: { source: "fixture" },
+        details: { source: "sandbox" },
       };
     },
   };

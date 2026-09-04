@@ -30,7 +30,9 @@ test("authenticated overview and consistent hierarchy", async ({
     ),
   ).toBeVisible();
   await page.getByRole("button", { name: "Capabilities" }).click();
-  await expect(page.getByLabel("Model")).toHaveValue("gpt-5.6-luna");
+  await expect(page.getByLabel("Model")).toHaveValue(
+    "openai-codex|gpt-5.6-luna|chatgpt_oauth|",
+  );
   await expect(page.getByLabel("Model").locator("option")).toHaveCount(7);
   await expect(
     page.getByText("Provider: openai-codex", { exact: false }),
@@ -107,7 +109,7 @@ test("real Luna: stream, staged preview, explicit approval and reload", async ({
 }, info) => {
   test.skip(
     process.env.AD_AGENT_LIVE_E2E !== "1",
-    "Opt-in: consumes ChatGPT quota, fixture only",
+    "Opt-in: consumes ChatGPT quota, local sandbox only",
   );
   test.setTimeout(240_000);
   await login(page);

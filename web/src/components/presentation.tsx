@@ -161,21 +161,26 @@ function ChangePreview({
   onAction: (change: Change, action: "apply" | "discard" | "reconcile") => void;
   busy?: boolean;
 }) {
-  const before =
-    change.kind === "budget"
-      ? `${format(change.before.budget)} ${change.currency}`
-      : change.before.status;
-  const after =
-    change.kind === "budget"
-      ? `${format(change.after.budget)} ${change.currency}`
-      : change.after.status;
+  const creating = change.kind === "create";
+  const before = creating
+    ? "Not created"
+    : change.kind === "budget"
+      ? `${format(change.before?.budget)} ${change.currency}`
+      : change.before?.status;
+  const after = creating
+    ? change.created?.status ?? change.create?.status ?? "DISABLE"
+    : change.kind === "budget"
+      ? `${format(change.after?.budget)} ${change.currency}`
+      : change.after?.status;
   return (
     <Card className="overflow-hidden">
       <CardHeader className="flex-row items-start justify-between">
         <div>
-          <CardTitle>{change.before.name}</CardTitle>
+          <CardTitle>{change.before?.name ?? change.created?.name ?? change.create?.name ?? "New entity"}</CardTitle>
           <CardDescription className="mt-1">
-            {change.kind === "budget"
+            {creating
+              ? `Create ${change.create?.level ?? "entity"}`
+              : change.kind === "budget"
               ? "Budget change"
               : "Delivery status change"}{" "}
             · {change.source.environment}

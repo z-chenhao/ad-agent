@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestFixtureSurvivesReopen(t *testing.T) {
+func TestSandboxSurvivesReopen(t *testing.T) {
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
 	ctx := context.Background()
@@ -40,7 +40,7 @@ func TestFixtureSurvivesReopen(t *testing.T) {
 	defer b.Store.Close()
 	entity, e := b.Backend.Get(ctx, ads.Campaign, before.ID)
 	if e != nil || entity.Budget.String() != "55" {
-		t.Fatal("lost persisted fixture change", e)
+		t.Fatal("lost persisted sandbox change", e)
 	}
 	persisted, e := b.Store.Change(ctx, c.ID)
 	if e != nil || persisted.State != ads.Applied {

@@ -5,8 +5,31 @@ description: Reviewing identities and creative assets, creative review state, re
 
 # Creative and identity operations
 
-This workflow remains staged until asset, identity, and review reads are typed. Future
-drafts must cite existing asset and identity IDs returned by TikTok, preserve review
-state, validate destination URLs, and source every product claim from operator-provided
-or connected business data. Upload, delete, share, appeal, and publish are separate
-high-risk actions and must never be hidden inside a copy recommendation.
+This workflow remains staged until asset, identity, ad-detail, policy-review, and video
+insight reads are typed.
+
+## Creative record
+
+For each ad, resolve identity/Spark authorization, video or image asset, duration and
+aspect ratio, copy, CTA, destination/deep link, tracking URL, creation date, review
+state, and current parent. Preserve asset reuse relationships; one asset can appear in
+multiple ads, so ad-level performance is not automatically asset-level performance.
+
+Audit technical eligibility, message-to-landing-page consistency, claim provenance,
+safe-zone risk, localization, rights/authorization, and historical performance. Use
+video-view or attention metrics only when the exact definitions are returned. TikTok's
+official baseline recommends vertical 9:16, at least 720p, sound, safe-zone visibility,
+people/creator presence, and continuous testing, but labels these as general starting
+points rather than guarantees:
+https://ads.tiktok.com/help/article/creative-best-practices
+
+## Future workflow
+
+Separate `inspect`, `recommend`, `draft copy`, `upload`, `share`, `delete`, `appeal`,
+and `publish`. Every draft cites host-returned asset and identity IDs and the source for
+each product or compliance claim. Upload completion is not ad publication; review
+approval is not delivery; a high-performing ad is not proof every contained asset caused
+the result.
+
+Destructive actions, rights changes, appeals, and publishing each require their own
+preview, authorization, and read-back.

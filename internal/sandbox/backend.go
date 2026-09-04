@@ -1,9 +1,11 @@
-// Package fixture implements AdBackend over explicit official-example-derived lab data.
-package fixture
+// Package sandbox implements a deterministic, fictional AdBackend for local acceptance.
+package sandbox
 
 import (
 	"context"
+	"crypto/rand"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,20 +65,58 @@ type Document struct {
 	Report    envelope[WireRow]    `json:"report"`
 }
 type Backend struct {
-	mu       sync.RWMutex
-	account  ads.Account
-	entities map[string]ads.Entity
-	rows     []ads.Row
+	mu          sync.RWMutex
+	environment string
+	account     ads.Account
+	entities    map[string]ads.Entity
+	rows        []ads.Row
 }
 
 func New() (*Backend, error) {
-	b, err := files.ReadFile("data/mock.json")
+	return NewEnvironment("default")
+}
+
+func NewEnvironment(environment string) (*Backend, error) {
+	if !ValidEnvironment(environment) {
+		return nil, fmt.Errorf("invalid sandbox environment %q", environment)
+	}
+	b, err := files.ReadFile("data/environment-seed.json")
 	if err != nil {
 		return nil, err
 	}
-	return FromJSON(b)
+	backend, err := fromJSON(b, environment)
+	if err != nil {
+		return nil, err
+	}
+	backend.account.Limitations = append(backend.account.Limitations, "Local sandbox environment: "+environment+". Results are fictional development evidence only.")
+	return backend, nil
+}
+
+// NewAccountEnvironment creates another advertiser inside a portfolio sandbox.
+// The underlying request-shaped seed stays the same, while identity and storage
+// scope are distinct. This is environment composition, not a failure scenario.
+func NewAccountEnvironment(environment, accountID, accountName string) (*Backend, error) {
+	if !ValidEnvironment(accountID) || accountName == "" || len(accountName) > 128 {
+		return nil, errors.New("invalid sandbox account profile")
+	}
+	b, err := NewEnvironment(environment)
+	if err != nil {
+		return nil, err
+	}
+	b.account.ID = accountID
+	b.account.Name = accountName
+	b.account.Source.AccountID = accountID
+	for id, entity := range b.entities {
+		entity.AccountID = accountID
+		b.entities[id] = entity
+	}
+	return b, nil
 }
 func FromJSON(b []byte) (*Backend, error) {
+	return fromJSON(b, "default")
+}
+
+func fromJSON(b []byte, environment string) (*Backend, error) {
 	var d Document
 	if err := json.Unmarshal(b, &d); err != nil {
 		return nil, err
@@ -87,8 +127,8 @@ func FromJSON(b []byte) (*Backend, error) {
 	if _, err := time.LoadLocation(d.Account.Timezone); err != nil {
 		return nil, errors.New("invalid account timezone")
 	}
-	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: d.Account.ID}
-	f := &Backend{account: ads.Account{ID: d.Account.ID, Name: d.Account.Name, Currency: d.Account.Currency, Timezone: d.Account.Timezone, LatestDate: d.Account.Latest, Source: source, Limitations: []string{"Official request-example fields are supplemented with synthetic delivery data; this is not a real advertiser.", "Fixed historical window: 2022-07-04 through 2022-07-17; purchase value and attribution are synthetic."}}, entities: map[string]ads.Entity{}}
+	source := ads.Source{Backend: "sandbox", Environment: environment, AccountID: d.Account.ID}
+	f := &Backend{environment: environment, account: ads.Account{ID: d.Account.ID, Name: d.Account.Name, Currency: d.Account.Currency, Timezone: d.Account.Timezone, LatestDate: d.Account.Latest, Source: source, Limitations: []string{"Official request-example fields are supplemented with synthetic delivery data; this is not a real advertiser.", "Fixed historical window: 2022-07-04 through 2022-07-17; purchase value and attribution are synthetic."}}, entities: map[string]ads.Entity{}}
 	for _, group := range []struct {
 		level ads.Level
 		items []wireEntity
@@ -192,7 +232,7 @@ func (f *Backend) Report(ctx context.Context, q ads.ReportQuery) (ads.Report, er
 	}
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	r := ads.Report{Source: f.account.Source, Query: q, Currency: f.account.Currency, Timezone: f.account.Timezone, Attribution: "fixture: synthetic purchase value; not a verified MAPI revenue mapping", FetchedAt: time.Now().UTC(), Complete: q.Start >= "2022-07-04" && q.End <= "2022-07-17", Limitations: append([]string{}, f.account.Limitations...), Rows: []ads.Row{}, Totals: ads.ZeroMetrics()}
+	r := ads.Report{Source: f.account.Source, Query: q, Currency: f.account.Currency, Timezone: f.account.Timezone, Attribution: "local sandbox: synthetic purchase value; not a verified MAPI revenue mapping", FetchedAt: time.Now().UTC(), Complete: q.Start >= "2022-07-04" && q.End <= "2022-07-17", Limitations: append([]string{}, f.account.Limitations...), Rows: []ads.Row{}, Totals: ads.ZeroMetrics()}
 	if !r.Complete {
 		r.Limitations = append(r.Limitations, "The requested dates extend beyond synthetic data coverage.")
 	}
@@ -270,22 +310,27 @@ func (f *Backend) Report(ctx context.Context, q ads.ReportQuery) (ads.Report, er
 	return r, nil
 }
 
-// Restore only accepts mutable fixture fields for existing identities; never imports live entities.
+// Restore loads a persisted sandbox entity. Existing identities may change only
+// mutable fields; newly-created identities must preserve a valid hierarchy.
 func (f *Backend) Restore(e ads.Entity) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	old, ok := f.entities[e.ID]
-	if !ok {
-		return ads.ErrNotFound
-	}
 	if err := ads.CheckEntity(e, f.account.ID); err != nil {
 		return err
+	}
+	if !ok {
+		if err := f.validateNew(e); err != nil {
+			return err
+		}
+		f.entities[e.ID] = e
+		return nil
 	}
 	expected := old
 	expected.Budget = e.Budget
 	expected.Status = e.Status
 	if expected.Version() != e.Version() {
-		return errors.New("invalid fixture override")
+		return errors.New("invalid sandbox override")
 	}
 	f.entities[e.ID] = e
 	return nil
@@ -300,21 +345,74 @@ func (f *Backend) Write(ctx context.Context, w ads.WriteRequest) ads.WriteOutcom
 	if !ok || e.Version() != w.Target.Version() {
 		return ads.WriteOutcome{State: "rejected", Message: "target changed"}
 	}
+	updated := e
 	switch w.Kind {
 	case "budget":
 		if w.Budget == nil || e.Level == ads.Ad || w.Budget.IsNegative() {
 			return ads.WriteOutcome{State: "rejected", Message: "invalid budget"}
 		}
 		v := *w.Budget
-		e.Budget = &v
+		updated.Budget = &v
 	case "status":
 		if w.Status != "ENABLE" && w.Status != "DISABLE" {
 			return ads.WriteOutcome{State: "rejected", Message: "invalid status"}
 		}
-		e.Status = w.Status
+		updated.Status = w.Status
 	default:
 		return ads.WriteOutcome{State: "rejected", Message: "unsupported change"}
 	}
-	f.entities[e.ID] = e
-	return ads.WriteOutcome{State: "acknowledged", RequestID: "fixture-write"}
+	f.entities[e.ID] = updated
+	return ads.WriteOutcome{State: "acknowledged", RequestID: "sandbox-write"}
+}
+
+func ValidEnvironment(value string) bool {
+	if len(value) < 1 || len(value) > 64 {
+		return false
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func (f *Backend) validateNew(entity ads.Entity) error {
+	if entity.Level == ads.Campaign {
+		if entity.ParentID != "" {
+			return errors.New("campaign cannot have a parent")
+		}
+		return nil
+	}
+	parent, ok := f.entities[entity.ParentID]
+	if !ok || entity.Level == ads.AdGroup && parent.Level != ads.Campaign || entity.Level == ads.Ad && parent.Level != ads.AdGroup {
+		return errors.New("invalid sandbox parent")
+	}
+	return nil
+}
+
+// Create adds a new object to this isolated fictional environment. The host
+// exposes it only through the staged-change approval path.
+func (f *Backend) Create(ctx context.Context, request ads.CreateRequest) (ads.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return ads.Entity{}, err
+	}
+	if err := request.Validate(); err != nil {
+		return ads.Entity{}, err
+	}
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return ads.Entity{}, err
+	}
+	entity := ads.Entity{ID: string(request.Level) + "_sandbox_" + hex.EncodeToString(random[:]), AccountID: f.account.ID, Level: request.Level, ParentID: request.ParentID, Name: request.Name, Status: request.Status, Budget: request.Budget, BudgetMode: request.BudgetMode, Objective: request.Objective}
+	if err := ads.CheckEntity(entity, f.account.ID); err != nil {
+		return ads.Entity{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.validateNew(entity); err != nil {
+		return ads.Entity{}, err
+	}
+	f.entities[entity.ID] = entity
+	return entity, nil
 }

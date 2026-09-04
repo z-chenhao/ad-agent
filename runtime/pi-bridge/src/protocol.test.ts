@@ -10,6 +10,7 @@ test("strict start and duplicate tool rejection", () => {
       provider: "openai-codex",
       model: "gpt-5.6-luna",
       reasoning: "medium",
+      auth_mode: "chatgpt_oauth",
     },
     max_rounds: 6,
     tools: [

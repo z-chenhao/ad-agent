@@ -18,7 +18,7 @@ func TestSessionLeaseCheckpointAndEvents(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "a"}
+	source := ads.Source{Backend: "sandbox", Environment: "baseline", AccountID: "a"}
 	session, e := s.Session(ctx, "one", source)
 	if e != nil {
 		t.Fatal(e)
@@ -69,7 +69,7 @@ func TestMemoryLifecycleIsSourceScoped(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "account-a"}
+	source := ads.Source{Backend: "sandbox", Environment: "baseline", AccountID: "account-a"}
 	m, err := s.SaveMemory(ctx, source, MemoryConstraint, "Limit each budget change to 10%")
 	if err != nil {
 		t.Fatal(err)
@@ -103,7 +103,7 @@ func TestMemoryValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
-	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "account-a"}
+	source := ads.Source{Backend: "sandbox", Environment: "baseline", AccountID: "account-a"}
 	for _, tc := range []struct {
 		kind MemoryKind
 		text string
@@ -130,7 +130,7 @@ func TestExtractedMemoryUpsertsBySourceAndKey(t *testing.T) {
 	}
 	defer s.Close()
 	ctx := context.Background()
-	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "account-a"}
+	source := ads.Source{Backend: "sandbox", Environment: "baseline", AccountID: "account-a"}
 	first, err := s.UpsertMemory(ctx, source, "budget guardrail", MemoryConstraint, "Keep budget changes below 10%")
 	if err != nil {
 		t.Fatal(err)

@@ -33,6 +33,7 @@ type loginSession struct {
 }
 type Server struct {
 	App       *app.App
+	Portfolio *app.PortfolioApp
 	Origin    string
 	DevOrigin string
 	WebDir    string
@@ -45,11 +46,19 @@ type Server struct {
 
 // New keeps the operator key in a permission-restricted local file, never a URL or stdout.
 func New(a *app.App, origin, webDir string) (*Server, error) {
+	return newServer(a, nil, a.Store.Dir, origin, webDir)
+}
+
+func NewPortfolio(a *app.PortfolioApp, origin, webDir string) (*Server, error) {
+	return newServer(nil, a, a.Store.Dir, origin, webDir)
+}
+
+func newServer(a *app.App, portfolioApp *app.PortfolioApp, stateDir, origin, webDir string) (*Server, error) {
 	u, err := url.Parse(origin)
 	if err != nil || u.Scheme != "http" || !loopback(u.Hostname()) || u.Path != "" {
 		return nil, errors.New("application origin must be loopback HTTP")
 	}
-	path := filepath.Join(a.Store.Dir, "operator-key")
+	path := filepath.Join(stateDir, "operator-key")
 	b, err := loadOrCreateOperatorKey(path)
 	if err != nil {
 		return nil, err
@@ -57,7 +66,7 @@ func New(a *app.App, origin, webDir string) (*Server, error) {
 	if len(b) < 32 {
 		return nil, errors.New("invalid operator key")
 	}
-	return &Server{App: a, Origin: origin, WebDir: webDir, keyHash: sha256.Sum256(b), sessions: map[string]loginSession{}}, nil
+	return &Server{App: a, Portfolio: portfolioApp, Origin: origin, WebDir: webDir, keyHash: sha256.Sum256(b), sessions: map[string]loginSession{}}, nil
 }
 
 func loadOrCreateOperatorKey(path string) ([]byte, error) {
@@ -122,6 +131,9 @@ func loopback(host string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 func (s *Server) Handler() http.Handler {
+	if s.Portfolio != nil {
+		return s.portfolioHandler()
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/login", s.login)
 	mux.HandleFunc("GET /api/v1/health/live", func(w http.ResponseWriter, r *http.Request) {
@@ -136,11 +148,12 @@ func (s *Server) Handler() http.Handler {
 	}))
 	mux.HandleFunc("GET /api/v1/config", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		writeJSON(w, 200, struct {
+			Mode    string                  `json:"mode"`
 			Runtime string                  `json:"runtime"`
 			Model   agenthost.ModelConfig   `json:"model"`
 			Writes  bool                    `json:"writes"`
 			Harness agenthost.PublicHarness `json:"harness"`
-		}{s.App.Runtime, s.App.Host.ModelConfig(), s.App.Writable, s.App.Host.PublicHarness()})
+		}{"single_advertiser", s.App.Runtime, s.App.Host.ModelConfig(s.App.Runtime), s.App.Writable, s.App.Host.PublicHarness()})
 	}))
 	mux.HandleFunc("POST /api/v1/logout", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		c, _ := r.Cookie("ad_session")
@@ -210,6 +223,10 @@ func (s *Server) Handler() http.Handler {
 		}
 		s.static(w, r)
 	})
+	return s.secure(mux)
+}
+
+func (s *Server) secure(mux *http.ServeMux) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
@@ -229,6 +246,192 @@ func (s *Server) Handler() http.Handler {
 		}
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) portfolioHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/login", s.login)
+	mux.HandleFunc("GET /api/v1/health/live", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, 200, struct {
+			Status string `json:"status"`
+		}{"ok"})
+	})
+	mux.HandleFunc("GET /api/v1/auth", s.authorize(func(w http.ResponseWriter, _ *http.Request, auth loginSession) {
+		writeJSON(w, 200, struct {
+			CSRF string `json:"csrf"`
+		}{auth.CSRF})
+	}))
+	mux.HandleFunc("POST /api/v1/logout", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		c, _ := r.Cookie("ad_session")
+		s.mu.Lock()
+		delete(s.sessions, c.Value)
+		s.mu.Unlock()
+		http.SetCookie(w, &http.Cookie{Name: "ad_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteStrictMode})
+		writeJSON(w, 200, struct {
+			OK bool `json:"ok"`
+		}{true})
+	}))
+	mux.HandleFunc("GET /api/v1/config", s.authorize(func(w http.ResponseWriter, _ *http.Request, _ loginSession) {
+		writeJSON(w, 200, struct {
+			Mode    string                  `json:"mode"`
+			Runtime string                  `json:"runtime"`
+			Model   agenthost.ModelConfig   `json:"model"`
+			Writes  bool                    `json:"writes"`
+			Harness agenthost.PublicHarness `json:"harness"`
+		}{"portfolio", s.Portfolio.Runtime, portfolioModelConfig(s.Portfolio.Host.DefaultModel(), s.Portfolio.Runtime), true, portfolioHarness()})
+	}))
+	mux.HandleFunc("GET /api/v1/portfolio", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		accounts, err := s.Portfolio.Scope.Accounts(r.Context())
+		respond(w, struct {
+			ID       string        `json:"id"`
+			Name     string        `json:"name"`
+			Accounts []ads.Account `json:"accounts"`
+		}{s.Portfolio.Scope.ID, s.Portfolio.Scope.Name, accounts}, err)
+	}))
+	mux.HandleFunc("GET /api/v1/portfolio/report", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		value, err := s.Portfolio.Scope.Performance(r.Context(), r.URL.Query().Get("start_date"), r.URL.Query().Get("end_date"))
+		respond(w, value, err)
+	}))
+	mux.HandleFunc("GET /api/v1/session", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		session, err := s.portfolioSession(r)
+		respond(w, session, err)
+	}))
+	mux.HandleFunc("GET /api/v1/changes", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		session, err := s.portfolioSession(r)
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		value, err := s.Portfolio.Store.Changes(r.Context(), session.ID)
+		respond(w, value, err)
+	}))
+	mux.HandleFunc("GET /api/v1/turns/{id}/events", s.authorize(s.portfolioEvents))
+	mux.HandleFunc("POST /api/v1/agent/turn", s.authorize(s.portfolioTurn))
+	mux.HandleFunc("POST /api/v1/changes/{id}/{action}", s.authorize(s.portfolioChange))
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) { writeError(w, 404, "not_found") })
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" && r.Method != "HEAD" {
+			writeError(w, 405, "method_not_allowed")
+			return
+		}
+		s.static(w, r)
+	})
+	return s.secure(mux)
+}
+
+func portfolioModelConfig(selected ar.ModelSelection, runtimeName string) agenthost.ModelConfig {
+	options := ar.SupportedModels()
+	if runtimeName == "claude" {
+		options = nil
+	}
+	found := false
+	for _, option := range options {
+		found = found || option.Provider == selected.Provider && option.Model == selected.Model && option.AuthMode == selected.AuthMode
+	}
+	if !found {
+		options = append(options, ar.ModelOption{Provider: selected.Provider, Model: selected.Model, Label: selected.Model + " (configured)", AuthMode: selected.AuthMode, API: selected.API, BaseURL: selected.BaseURL, APIKeyEnv: selected.APIKeyEnv, ContextWindow: selected.ContextWindow, MaxOutputTokens: selected.MaxOutputTokens})
+	}
+	return agenthost.ModelConfig{Default: selected, Options: options}
+}
+
+func portfolioHarness() agenthost.PublicHarness {
+	return agenthost.PublicHarness{Capabilities: []agenthost.PublicCapability{{Name: "portfolio-operations", Description: "Cross-account triage, isolated analysis, account drill-down, and independent advertiser-scoped drafts.", Tools: []string{"list_advertisers", "get_portfolio_performance", "run_portfolio_analysis", "list_account_entities", "get_account_entity", "stage_account_budget_change", "stage_account_status_change", "stage_account_entity_create", "get_pending_changes"}}}, Grounding: true, StagingFollowThrough: true, ReadConcurrency: true}
+}
+
+func (s *Server) portfolioSession(r *http.Request) (store.Session, error) {
+	id := r.URL.Query().Get("session_id")
+	if id == "" {
+		id = "web"
+	}
+	if !validSession(id) {
+		return store.Session{}, errors.New("invalid_session")
+	}
+	return s.Portfolio.Store.Session(r.Context(), id, s.Portfolio.Scope.Source())
+}
+
+func (s *Server) portfolioTurn(w http.ResponseWriter, r *http.Request, _ loginSession) {
+	var input struct {
+		Message   string            `json:"message"`
+		SessionID string            `json:"session_id"`
+		Model     ar.ModelSelection `json:"model"`
+	}
+	if !readJSON(w, r, &input) {
+		return
+	}
+	if !validSession(input.SessionID) || len(input.Message) == 0 || len(input.Message) > 16000 {
+		writeError(w, 400, "invalid_turn")
+		return
+	}
+	if _, err := ar.NormalizeModel(input.Model); err != nil {
+		writeError(w, 400, "invalid_model")
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, 500, "stream_unavailable")
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	w.Header().Set("X-Accel-Buffering", "no")
+	flusher.Flush()
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	_, err := s.Portfolio.Host.RunWithModel(ctx, input.SessionID, input.Message, input.Model, func(event store.Event) {
+		body, _ := json.Marshal(event)
+		if _, writeErr := fmt.Fprintf(w, "id: %d\nevent: message\ndata: %s\n\n", event.Seq, body); writeErr != nil {
+			cancel()
+			return
+		}
+		flusher.Flush()
+	})
+	if err != nil && ctx.Err() == nil {
+		fmt.Fprint(w, "event: error\ndata: {\"error\":\"turn_failed\"}\n\n")
+		flusher.Flush()
+	}
+}
+
+func (s *Server) portfolioEvents(w http.ResponseWriter, r *http.Request, _ loginSession) {
+	session, err := s.portfolioSession(r)
+	if err != nil {
+		respond(w, nil, err)
+		return
+	}
+	id := r.PathValue("id")
+	for _, message := range session.Messages {
+		if message.TurnID == id {
+			value, eventErr := s.Portfolio.Store.Events(r.Context(), id, 0)
+			respond(w, value, eventErr)
+			return
+		}
+	}
+	writeError(w, 404, "turn_not_found")
+}
+
+func (s *Server) portfolioChange(w http.ResponseWriter, r *http.Request, _ loginSession) {
+	var input struct {
+		SessionID string `json:"session_id"`
+	}
+	if !readJSON(w, r, &input) {
+		return
+	}
+	if !validSession(input.SessionID) {
+		writeError(w, 400, "invalid_session")
+		return
+	}
+	var value ads.Change
+	var err error
+	switch r.PathValue("action") {
+	case "apply":
+		value, err = s.Portfolio.Scope.Apply(r.Context(), input.SessionID, r.PathValue("id"), "local-web-operator")
+	case "discard":
+		value, err = s.Portfolio.Scope.Discard(r.Context(), input.SessionID, r.PathValue("id"))
+	case "reconcile":
+		value, err = s.Portfolio.Scope.Reconcile(r.Context(), input.SessionID, r.PathValue("id"))
+	default:
+		writeError(w, 404, "not_found")
+		return
+	}
+	respond(w, value, err)
 }
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()

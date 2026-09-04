@@ -48,6 +48,7 @@ const safeCodes = new Set([
   "provider_failed",
   "provider_incomplete",
   "oauth_or_model_missing",
+  "api_key_missing",
   "invalid_model",
 ]);
 
@@ -66,8 +67,36 @@ async function start(providerState: unknown, requested: ModelSelection) {
     allowModelNetwork: false,
     signal: AbortSignal.timeout(10_000),
   });
+  if (selection.auth_mode === "api_key") {
+    const apiKey = process.env[selection.api_key_env!];
+    if (!apiKey) throw new Error("api_key_missing");
+    modelRuntime.registerProvider(selection.provider, {
+      name: selection.provider,
+      baseUrl: selection.base_url!,
+      apiKey: `$${selection.api_key_env!}`,
+      api: selection.api!,
+      models: [
+        {
+          id: selection.model,
+          name: selection.model,
+          reasoning: true,
+          input: ["text"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: selection.context_window!,
+          maxTokens: selection.max_output_tokens!,
+        },
+      ],
+    });
+    await modelRuntime.setRuntimeApiKey(selection.provider, apiKey, {
+      signal: AbortSignal.timeout(10_000),
+    });
+  }
   model = modelRuntime.getModel(selection.provider, selection.model);
-  if (!model || !modelRuntime.isUsingOAuth(selection.provider))
+  if (
+    !model ||
+    (selection.auth_mode === "chatgpt_oauth" &&
+      !modelRuntime.isUsingOAuth(selection.provider))
+  )
     throw new Error("oauth_or_model_missing");
   send({ type: "ready" });
 }

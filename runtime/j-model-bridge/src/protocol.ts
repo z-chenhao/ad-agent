@@ -24,9 +24,15 @@ export interface JTool {
   inputSchema: Record<string, unknown>;
 }
 export interface ModelSelection {
-  provider: "openai-codex";
+  provider: string;
   model: string;
   reasoning: "medium";
+  auth_mode: "chatgpt_oauth" | "api_key";
+  api?: "anthropic-messages" | "openai-responses" | "openai-completions";
+  base_url?: string;
+  api_key_env?: string;
+  context_window?: number;
+  max_output_tokens?: number;
 }
 export interface JRequest {
   messages: JMessage[];
@@ -267,11 +273,25 @@ function validateModel(value: unknown): asserts value is ModelSelection {
   if (
     !value ||
     typeof value !== "object" ||
-    (value as Record<string, unknown>).provider !== "openai-codex" ||
-    !supportedModels.has(String((value as Record<string, unknown>).model)) ||
-    (value as Record<string, unknown>).reasoning !== "medium"
+    !validModel(value as Record<string, unknown>)
   )
     throw new Error("invalid_model");
+}
+
+function validModel(model: Record<string, unknown>): boolean {
+  if (model.reasoning !== "medium") return false;
+  if (model.auth_mode === "chatgpt_oauth")
+    return model.provider === "openai-codex" && supportedModels.has(String(model.model));
+  return (
+    model.auth_mode === "api_key" &&
+    typeof model.provider === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model.provider) &&
+    typeof model.model === "string" && /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/.test(model.model) &&
+    ["anthropic-messages", "openai-responses", "openai-completions"].includes(String(model.api)) &&
+    typeof model.base_url === "string" &&
+    typeof model.api_key_env === "string" && /^[A-Z][A-Z0-9_]{0,127}$/.test(model.api_key_env) &&
+    Number.isInteger(model.context_window) && Number(model.context_window) >= 4096 &&
+    Number.isInteger(model.max_output_tokens) && Number(model.max_output_tokens) >= 256
+  );
 }
 
 function canonical(value: unknown): string {

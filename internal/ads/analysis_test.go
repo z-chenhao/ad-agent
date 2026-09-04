@@ -33,7 +33,7 @@ func TestWeightedAndUnavailable(t *testing.T) {
 }
 func TestPolicyRejectsBroadOrOversizedChanges(t *testing.T) {
 	before := Entity{ID: "x", AccountID: "a", Level: Campaign, Status: "DISABLE", Budget: money("50")}
-	p := FixturePolicy()
+	p := SandboxPolicy()
 	after := before
 	after.Budget = money("55")
 	if e := p.Validate(before, after, BudgetChange); e != nil {

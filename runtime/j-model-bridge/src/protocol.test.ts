@@ -12,6 +12,7 @@ const selection = {
   provider: "openai-codex" as const,
   model: "gpt-5.6-luna",
   reasoning: "medium" as const,
+  auth_mode: "chatgpt_oauth" as const,
 };
 
 function assistant(): AssistantMessage {
