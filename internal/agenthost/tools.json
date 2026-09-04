@@ -326,6 +326,48 @@
     }
   },
   {
+    "name": "present_digest",
+    "description": "Present a prioritized advertising operations digest. References are joined from server records.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "opportunity",
+                  "warning",
+                  "delivery",
+                  "measurement",
+                  "change"
+                ]
+              },
+              "headline": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 180
+              },
+              "why": { "type": "string", "minLength": 1, "maxLength": 280 },
+              "ref_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+              "action": { "type": "string", "minLength": 1, "maxLength": 120 }
+            },
+            "required": ["kind", "headline"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["title", "items"],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "present_suggestions",
     "description": "Present 1–4 optional follow-up prompts, never approval controls.",
     "parameters": {
@@ -349,17 +391,13 @@
   },
   {
     "name": "load_skill",
-    "description": "Load one project-local workflow: performance-diagnosis, budget-operations, delivery-operations.",
+    "description": "Load one active project-local workflow when the operator's request matches the installed skill index.",
     "parameters": {
       "type": "object",
       "properties": {
         "name": {
           "type": "string",
-          "enum": [
-            "performance-diagnosis",
-            "budget-operations",
-            "delivery-operations"
-          ]
+          "enum": []
         }
       },
       "required": ["name"],

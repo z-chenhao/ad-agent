@@ -5,6 +5,15 @@ export interface Source {
 }
 export interface RuntimeConfig {
   runtime: "pi" | "j" | "custom";
+  harness: {
+    capabilities: { name: string; description: string; tools: string[] }[];
+    grounding: boolean;
+    staging_follow_through: boolean;
+    close_on_presentation: boolean;
+    read_concurrency: boolean;
+    partial_presentation: boolean;
+    automatic_memory_capture: boolean;
+  };
 }
 export interface Account {
   id: string;
@@ -104,6 +113,13 @@ export interface Change {
   note?: string;
   approved_by?: string;
 }
+export interface Memory {
+  id: string;
+  key?: string;
+  kind: "preference" | "constraint" | "goal";
+  text: string;
+  created_at: string;
+}
 export interface Card {
   id: string;
   type: string;
@@ -114,6 +130,18 @@ export interface Card {
   entities?: Entity[];
   change?: Change;
   suggestions?: string[];
+  digest?: {
+    title: string;
+    items: {
+      kind: "opportunity" | "warning" | "delivery" | "measurement" | "change";
+      headline: string;
+      why?: string;
+      action?: string;
+      entity?: Entity;
+      change?: Change;
+    }[];
+  };
+  pending?: boolean;
 }
 export interface Message {
   role: string;

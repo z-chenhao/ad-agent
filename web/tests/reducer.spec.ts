@@ -22,3 +22,29 @@ test("replayed events are idempotent and new sessions clear all cards", () => {
   s = reduceEvent(s, event("client.reset", 0, {}));
   expect(s).toEqual(emptyLive);
 });
+
+test("partial presentation is replaced by the trusted final card", () => {
+  let state = reduceEvent(emptyLive, event("turn.started", 1, {}));
+  state = reduceEvent(
+    state,
+    event("ui.partial", 2, {
+      id: "partial-one",
+      type: "digest",
+      pending: true,
+    }),
+  );
+  expect(state.cards).toEqual([
+    { id: "partial-one", type: "digest", pending: true },
+  ]);
+  state = reduceEvent(
+    state,
+    event("ui.upsert", 3, {
+      id: "final-one",
+      type: "digest",
+      digest: { title: "Today", items: [] },
+    }),
+  );
+  expect(state.cards).toHaveLength(1);
+  expect(state.cards[0]).toMatchObject({ id: "final-one" });
+  expect(state.cards[0]?.pending).toBeUndefined();
+});

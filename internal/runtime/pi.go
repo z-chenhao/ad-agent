@@ -92,6 +92,10 @@ func (p Pi) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 			if h.Emit != nil {
 				h.Emit(Event{Type: "text.delta", Text: f.Text})
 			}
+		case "tool_delta":
+			if h.Emit != nil && f.Name != "" {
+				h.Emit(Event{Type: "tool.delta", ID: f.ID, Name: f.Name, Arguments: f.Arguments})
+			}
 		case "tool_call":
 			if f.ID == "" || seen[f.ID] || f.Round < lastRound || f.Round < 1 {
 				return Result{}, errors.New("invalid tool correlation or round")
@@ -105,6 +109,9 @@ func (p Pi) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 			result := Failure("tool_budget_exhausted")
 			if f.Round <= r.MaxRounds && h.Execute != nil {
 				result = h.Execute(ctx, f.Call)
+			}
+			if result.OK && h.CloseAfter != nil && h.CloseAfter(f.Call, result) {
+				result.Close = true
 			}
 			b, _ := json.Marshal(result)
 			if len(b) > 65536 {

@@ -1,5 +1,5 @@
-// 单用户开发准备探针：只向模型发送虚构数据，不连接 TikTok，不修改默认模型设置。
-// 用法：node scripts/check-pi-readiness.mjs /absolute/path/to/pi-coding-agent/dist/index.js
+// Single-user readiness probe: sends fictional data only, does not connect to TikTok, and does not change default model settings.
+// Usage: node scripts/check-pi-readiness.mjs /absolute/path/to/pi-coding-agent/dist/index.js
 import { randomUUID } from "node:crypto";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -38,9 +38,9 @@ try {
       "This readiness probe is verified only against Pi 0.84.4; review bootstrap before upgrading.",
     );
   }
-  // Pi CLI 做这一步，但导入 SDK 不会自动执行。它同时配置代理 dispatcher 和
-  // 配套 undici fetch；仅设置 Node --use-env-proxy 不等价。本探针沿用已有代理环境，
-  // 不修改 shell/系统代理/用户模型配置。内部入口仅用于固定版本诊断，不是稳定 SDK 合同。
+  // Pi CLI performs this initialization, but importing the SDK does not. It configures both
+  // the proxy dispatcher and matching undici fetch. This probe preserves the existing proxy
+  // environment and does not change shell, system proxy, or user model settings.
   const { configureHttpDispatcher } = await import(
     new URL("./core/http-dispatcher.js", entryURL).href
   );

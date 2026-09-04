@@ -37,6 +37,7 @@ func testHost(t *testing.T, r ar.Runtime) (*Host, *fixture.Backend) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	h.AutomaticMemoryCapture = false
 	return h, b
 }
 func call(name, args string) ar.Call {
@@ -60,11 +61,11 @@ func TestHostIsolationAndEvents(t *testing.T) {
 		if !h.Execute(ctx, call("stage_budget_change", `{"level":"campaign","id":"campaign_example_1","budget":"55","currency":"USD","reason":"operator request"}`)).OK {
 			t.Fatal("stage failed")
 		}
-		h.Emit(ar.Event{Type: "text.delta", Text: "草案待审批"})
-		return ar.Result{Stop: "stop", Text: "草案待审批"}, nil
+		h.Emit(ar.Event{Type: "text.delta", Text: "Draft awaiting approval"})
+		return ar.Result{Stop: "stop", Text: "Draft awaiting approval"}, nil
 	})
 	h, b := testHost(t, model)
-	result, err := h.Run(context.Background(), "test", "把预算改为 55", nil)
+	result, err := h.Run(context.Background(), "test", "Change the budget to 55", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +221,7 @@ func TestExplicitMemoryLifecycleAndInjection(t *testing.T) {
 	model := fakeRuntime(func(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
 		runs++
 		if runs == 1 {
-			result := h.Execute(ctx, call("save_memory", `{"kind":"constraint","text":"预算调整一次不超过 10%"}`))
+			result := h.Execute(ctx, call("save_memory", `{"kind":"constraint","text":"Limit each budget change to 10%"}`))
 			if !result.OK {
 				t.Fatal(result.Error)
 			}
@@ -233,7 +234,7 @@ func TestExplicitMemoryLifecycleAndInjection(t *testing.T) {
 				t.Fatal("saved memory not recalled", result.Error)
 			}
 		} else {
-			if !strings.Contains(r.Prompt, "预算调整一次不超过 10%") || !strings.Contains(r.Prompt, "<saved_facts>") {
+			if !strings.Contains(r.Prompt, "Limit each budget change to 10%") || !strings.Contains(r.Prompt, "<saved_facts>") {
 				t.Fatal("memory not fenced into the next turn")
 			}
 			result := h.Execute(ctx, call("delete_memory", `{"memory_id":"`+savedID+`"}`))
@@ -244,10 +245,10 @@ func TestExplicitMemoryLifecycleAndInjection(t *testing.T) {
 		return ar.Result{Stop: "stop", Text: "done"}, nil
 	})
 	h, _ := testHost(t, model)
-	if _, err := h.Run(context.Background(), "memory-test", "记住这个约束", nil); err != nil {
+	if _, err := h.Run(context.Background(), "memory-test", "Remember this constraint", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.Run(context.Background(), "memory-test", "删除刚才的约束", nil); err != nil {
+	if _, err := h.Run(context.Background(), "memory-test", "Delete that constraint", nil); err != nil {
 		t.Fatal(err)
 	}
 	memories, err := h.Store.Memories(context.Background(), ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "advertiser_example_1"}, 50)
@@ -258,10 +259,10 @@ func TestExplicitMemoryLifecycleAndInjection(t *testing.T) {
 
 func TestMemoryRejectsCredentialAndObjectFacts(t *testing.T) {
 	for _, text := range []string{
-		"App Secret 是 secret-value",
+		"App Secret is secret-value",
 		"remember access_token abc",
 		"advertiser_id is 123",
-		"账号编号 1234567890123456789",
+		"account number 1234567890123456789",
 		"sk-" + "abcdefghijklmnopqrstuvwxyz",
 	} {
 		if !unsafeMemoryText(text) {
@@ -269,12 +270,154 @@ func TestMemoryRejectsCredentialAndObjectFacts(t *testing.T) {
 		}
 	}
 	for _, text := range []string{
-		"预算调整一次不超过 10%",
-		"优先优化转化成本",
-		"每周一查看上周表现",
+		"Limit each budget change to 10%",
+		"Prioritize conversion-cost optimization",
+		"Review last week every Monday",
 	} {
 		if unsafeMemoryText(text) {
 			t.Fatalf("safe memory rejected: %q", text)
 		}
+	}
+}
+
+func TestHarnessForcesPerformanceGroundingAndDeduplicatesPartialCards(t *testing.T) {
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		if !strings.Contains(request.Prompt, "<host_grounding>") || !strings.Contains(request.Prompt, `"tool":"get_performance_report"`) || !strings.Contains(request.Prompt, "report_") {
+			t.Fatalf("required performance grounding missing from prompt: %s", request.Prompt)
+		}
+		hooks.Emit(ar.Event{Type: "tool.delta", ID: "presentation-1", Name: "present_metrics"})
+		hooks.Emit(ar.Event{Type: "tool.delta", ID: "presentation-1", Name: "present_metrics"})
+		return ar.Result{Stop: "stop", Text: "grounded", Checkpoint: `{"id":"checkpoint"}`}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "grounding-test", "Compare campaign performance for the latest seven days", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := host.Store.Events(context.Background(), result.TurnID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	partials := 0
+	forcedReads := 0
+	for _, event := range events {
+		if event.Type == "ui.partial" {
+			partials++
+		}
+		if event.Type == "tool.started" && strings.Contains(string(event.Data), "get_performance_report") {
+			forcedReads++
+		}
+	}
+	if partials != 1 {
+		t.Fatalf("partial presentation events = %d, want 1", partials)
+	}
+	if forcedReads != 1 {
+		t.Fatalf("forced grounding reads = %d, want 1", forcedReads)
+	}
+}
+
+func TestHarnessFollowsThroughOnRequestedChange(t *testing.T) {
+	runs := 0
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		runs++
+		if runs == 1 {
+			return ar.Result{Stop: "stop", Text: "I recommend changing it.", Checkpoint: `{"id":"first"}`}, nil
+		}
+		if !strings.Contains(request.Checkpoint, "first") {
+			t.Fatal("follow-through did not resume the first runtime checkpoint")
+		}
+		if request.Prompt != stagingFollowThroughReminder {
+			t.Fatalf("unexpected follow-through prompt: %s", request.Prompt)
+		}
+		if result := hooks.Execute(ctx, call("get_entity", `{"level":"campaign","id":"campaign_example_1"}`)); !result.OK {
+			t.Fatal(result.Error)
+		}
+		result := hooks.Execute(ctx, call("stage_budget_change", `{"level":"campaign","id":"campaign_example_1","budget":"55","currency":"USD","reason":"operator requested 55 USD"}`))
+		if !result.OK {
+			t.Fatal(result.Error)
+		}
+		return ar.Result{Stop: "stop", Text: "Draft staged.", Checkpoint: `{"id":"second"}`}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "follow-through", "Change campaign_example_1 budget to 55 USD", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runs != 2 || !strings.Contains(result.Text, "Draft staged") {
+		t.Fatalf("follow-through result = %#v, runs = %d", result, runs)
+	}
+	changes, err := host.Store.Changes(context.Background(), "follow-through")
+	if err != nil || len(changes) != 1 || changes[0].State != ads.Staged {
+		t.Fatalf("staged changes = %#v, err = %v", changes, err)
+	}
+}
+
+func TestHarnessEnrichesDigestAndClosesOnlyTerminalPresentation(t *testing.T) {
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		if result := hooks.Execute(ctx, call("get_entity", `{"level":"campaign","id":"campaign_example_1"}`)); !result.OK {
+			t.Fatal(result.Error)
+		}
+		digest := hooks.Execute(ctx, call("present_digest", `{"title":"Today","items":[{"kind":"delivery","headline":"Inspect delivery","ref_id":"campaign_example_1","action":"Review campaign"}]}`))
+		if !digest.OK || hooks.CloseAfter(call("present_digest", `{}`), digest) {
+			t.Fatalf("digest must render but keep the turn open: %#v", digest)
+		}
+		bad := hooks.Execute(ctx, call("present_digest", `{"title":"Bad","items":[{"kind":"warning","headline":"Ungrounded","ref_id":"campaign_unknown"}]}`))
+		if bad.OK || bad.Error != "digest_reference_not_grounded" {
+			t.Fatalf("ungrounded digest accepted: %#v", bad)
+		}
+		suggestions := hooks.Execute(ctx, call("present_suggestions", `{"suggestions":["Review campaign"]}`))
+		if !suggestions.OK || !hooks.CloseAfter(call("present_suggestions", `{}`), suggestions) {
+			t.Fatalf("suggestions must close the presentation sequence: %#v", suggestions)
+		}
+		return ar.Result{Stop: "stop", Text: "done"}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "digest-test", "Give me a briefing", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Cards) != 2 || result.Cards[0].Digest == nil || result.Cards[0].Digest.Items[0].Entity == nil {
+		t.Fatalf("digest was not server-enriched: %#v", result.Cards)
+	}
+}
+
+func TestAutomaticMemoryExtractionUsesIsolatedFilteredTool(t *testing.T) {
+	extractions := 0
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		if request.System != memoryExtractionSystem {
+			return ar.Result{Stop: "stop", Text: "Understood."}, nil
+		}
+		extractions++
+		if len(request.Tools) != 1 || request.Tools[0].Name != "record_memory_fact" || strings.Contains(request.Prompt, "campaign_example") {
+			t.Fatalf("memory authority or transcript leak: %#v", request)
+		}
+		text := "Keep each budget change at or below 10%"
+		if extractions == 2 {
+			text = "Keep each budget change at or below 8%"
+		}
+		arguments, _ := json.Marshal(map[string]string{"key": "budget_guardrail", "kind": "constraint", "text": text})
+		result := hooks.Execute(ctx, ar.Call{ID: "memory-call", Name: "record_memory_fact", Arguments: arguments, Round: 1})
+		if !result.OK {
+			t.Fatal(result.Error)
+		}
+		return ar.Result{Stop: "stop", Text: ""}, nil
+	})
+	host, _ := testHost(t, model)
+	host.AutomaticMemoryCapture = true
+	if !host.PublicHarness().AutomaticMemoryCapture {
+		t.Fatal("automatic memory capability not projected")
+	}
+	for _, message := range []string{
+		"I want every budget adjustment kept at or below 10%.",
+		"Update that standing limit to 8%.",
+	} {
+		if _, err := host.Run(context.Background(), "auto-memory", message, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	account, _ := host.Backend.Account(context.Background())
+	memories, err := host.Store.Memories(context.Background(), account.Source, 50)
+	if err != nil || len(memories) != 1 || memories[0].Key != "budget_guardrail" || !strings.Contains(memories[0].Text, "8%") {
+		t.Fatalf("extracted memories = %#v, err = %v", memories, err)
 	}
 }

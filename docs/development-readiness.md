@@ -1,106 +1,108 @@
-# 实施进度与验收记录
+# Development readiness and acceptance record
 
-更新：2026-09-04。无需重新确认架构、重新登录 Pi 或提供任何确认码。首版开发和 J runtime
-接入已完成；不能将
-CLI 验证扩大为整个产品完成，也不能把 fixture 结果称为真实 TikTok 接入成功。
+Updated 2026-09-04. No architecture confirmation, Pi login, or verification code is
+currently required from the user. The TikTok developer app is pending approval.
 
-## 已固定的决定
+## Fixed decisions
 
-- 单用户本地工具；Go host + React；AdBackend 与 runtime 分别替换。
-- 两个 runtime：Pi 0.84.4 薄 sidecar；J-agent 固定 commit `6ddcaee` + model-only bridge。
-  两者复用 ChatGPT OAuth，显式 gpt-5.6-luna。
-- CLI、Web、整体 review 和首次私有 GitHub 推送完成后，J-agent runtime 已按顺序接入。
-- 只读分析、草案、操作员审批分离；模型没有 apply 工具。
-- 无真实账户时使用明确标记的 fixture，不等待 TikTok 审批，不制造真实投放数据。
+- Single-user local application with a Go host and React UI.
+- Independent AdBackend and runtime replacement axes.
+- Pi 0.84.4 full-agent sidecar and J-agent at commit `6ddcaee` with a model-only bridge.
+- Existing ChatGPT OAuth and explicit `openai-codex/gpt-5.6-luna` for both runtimes.
+- Read analysis, model-authored drafts, and operator approval are separate.
+- Fixture data is explicitly fictional and never used as a live fallback.
+- Active versus staged workflow skills are generated from one validated manifest.
 
-## 当前证据
+## Current evidence
 
-| 项目                | 结果                                                                                     | 证明范围                                                                                                                                      |
-| ------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go / Node / runtime | Go 1.26.2、Node 24.14.1、Pi SDK 0.84.4、J-agent `6ddcaee`                                | 本次工具链，依赖已锁定                                                                                                                        |
-| 编译                | make build 通过                                                                          | Go CLI/HTTP、Pi/J bridges 与 React production bundle 可构建                                                                                   |
-| Go 测试             | go test -race ./... 通过                                                                 | 领域、fixture、host、store、bridge、HTTP 安全与重启验证                                                                                       |
-| TS 测试             | Pi bridge fencing；J native-state replay、失配、frame 限制和空 reasoning 规范化通过      | 不等于完整 provider 行为覆盖                                                                                                                  |
-| 真实 CLI 读取       | 2026-09-04 最新复测 22.9 秒完成账户/campaign 读取、实体卡片与来源披露                    | Go → Pi → Luna → Go 工具 → 续答；未创建草案                                                                                                   |
-| 真实 CLI 分析       | 两期报告、独立 child、Go 比较证据、可信卡片，约 93 秒                                    | ROAS 3 → 1.6667；首个 campaign 贡献 -1.3333，控制组 0                                                                                         |
-| 真实 CLI 草案       | 同会话恢复、重读对象、50 → 55 USD 总预算草案及预览，约 22 秒                             | 模型只 stage，未修改数据源                                                                                                                    |
-| 独立 CLI 审批       | 草案 approved/applied，重启读取预算 55，再次审批被拒绝                                   | fixture-only 写入、持久化与单次审批                                                                                                           |
-| React 浏览器测试    | 登录、概览、三级层级、CSRF、事件去重、桌面/手机布局通过                                  | production bundle + loopback host                                                                                                             |
-| Web 真模型用例      | 2026-09-04 最新复测 37.1 秒完成 stream → stage → 独立审批 → read-back → reload；5/5 通过 | 完整本地页面闭环；使用 fixture，不代表真实 TikTok 写入                                                                                        |
-| MAPI adapter        | HTTP fake 通过                                                                           | account/list/get/report、官方 `AUCTION_*` 层级、30 天 daily 上限、JSON query、分页、429/5xx、业务 code、跨账户和缺失指标；不等于真实权限/口径 |
-| OAuth callback      | 本地安全测试和 `oauth-start` CLI smoke 通过                                              | 官方 URL 保留/校验、一次性 hash-only state、token exchange、0600 credential、callback-only mux；尚未跑真实授权                                |
-| J-agent CLI         | 真实读取 24.5 秒；同 session 恢复 + analysis child 147.9 秒；草案预览 44.5 秒通过        | J-agent 真正拥有 loop；model-only bridge 复用 OAuth/Luna；未接触真实 TikTok                                                                   |
-| J-agent Web         | 5/5 Playwright 通过；真模型 stream → stage → 独立审批 → read-back → reload 为 48.4 秒    | 完整本地 fixture 页面闭环；空 reasoning 回归已覆盖                                                                                            |
-| GitHub              | 首版及 J runtime 均已完成 review，目标私有仓库 `z-chenhao/ad-agent`                      | 不代表开源发布或真实广告写授权                                                                                                                |
+| Area            | Result                                              | What it proves                                                            |
+| --------------- | --------------------------------------------------- | ------------------------------------------------------------------------- |
+| Build           | `make test` passed at v0.8                          | Go, Pi/J bridges, and React production bundle build                       |
+| Go tests        | `go test -race ./...` passed at v0.8                | Domain, harness, analysis, memory, HTTP, OAuth, and adapters              |
+| Runtime tests   | Pi close/partial and J replay/concurrency passed    | Bridge, continuation, terminal, and independent-read invariants           |
+| Pi CLI          | live Luna read, analysis, and draft passed          | Pi -> Luna -> Go tool continuation on fixture                             |
+| J CLI           | live Luna read, restore, analysis, and draft passed | J owns the loop; bridge only supplies the model                           |
+| Pi Web          | six Playwright tests passed, including live Luna    | SSE, draft, approval, read-back, reload, desktop, and mobile              |
+| J Web           | the same six Playwright tests passed with live Luna | The complete Web workflow is runtime-neutral rather than Pi-only          |
+| TikTok adapter  | HTTP-fake tests passed                              | account, hierarchy, report, pagination, errors, limits                    |
+| OAuth callback  | local security and smoke tests passed               | state, replay defense, exchange, local credential file                    |
+| TikTok platform | not run                                             | app approval, scopes, advertiser binding, and real data remain unverified |
 
-模型验证仅发送 fixture 数据，使用既有 ChatGPT OAuth。最初探针的 fetch 失败源于
-遗漏 HTTP 初始化；正式 sidecar 显式使用 undici 的代理 dispatcher 与 fetch。
-没有修改用户全局默认模型、OAuth 或系统代理。
+The latest successful probes do not guarantee provider availability. A prior transport
+failure terminated without a tool call or draft and later passed unchanged. External
+provider failure remains an explicit state.
 
-2026-09-04 曾出现一次 provider transport 故障：WebSocket 失败后 SSE 也 `fetch failed`，
-应用按 failed 终结且没有工具调用或草案；没有修改代理或 OAuth。随后在相同配置下，锁定
-Pi/Luna 的 readiness probe、真实 CLI 读取和 Web 真模型 E2E 均复测通过。该故障保留为
-历史证据，说明外部 provider 可暂时不可用；当前验证状态以最新成功为准，不把它推断成
-网络永远稳定。
+## v0.8 harness and workspace alignment
 
-复现：
+Implemented in source on top of the v0.7 workflow expansion:
+
+- forced intent-specific grounding before the model loop;
+- same-turn staging follow-through for actionable operator requests;
+- isolated read-only analysis with server-issued datasets and calculations;
+- concurrent independent reads with host-serialized mutations;
+- pending presentation records, server enrichment, and terminal suggestions;
+- isolated automatic extraction of filtered durable operator facts;
+- a focused shadcn/ui and Tailwind workspace with overview, hierarchy, change review,
+  assistant, activity, and memory surfaces;
+- an explicit Commercial Agents alignment matrix and editable Excalidraw architecture.
+
+Local v0.8 acceptance evidence:
+
+- all 18 skill packages passed the skill-creator structural validator;
+- skill registry tests confirm nine active entries, staged exclusion, generated enum,
+  and required-tool availability;
+- the repository English check reports no Chinese text in authored files;
+- Go race tests, Node tests, and the React production build passed;
+- Pi and J fixture Web suites each passed five ordinary tests, including partial-card
+  replacement, authentication and CSRF, hierarchy consistency, activity and memory
+  inspection, and mobile containment;
+- Pi and J each passed the opt-in real Luna browser test: one exact fixture budget draft,
+  no pre-approval mutation, authenticated confirmation, read-back verification, and
+  post-reload persistence;
+- forced grounding, presentation deduplication, staging follow-through, digest
+  enrichment, terminal close, isolated memory extraction, and J concurrent-call tests
+  passed under the race detector;
+- active skills were reviewed against installed tool names.
+- a real Pi/Luna fixture turn completed in 41.2 seconds, loaded
+  `daily-account-briefing`, executed account, campaign, report, and pending-change reads,
+  presented trusted metrics and suggestions, and created no draft.
+
+## Callback and tunnel
+
+The registered HTTPS ngrok root callback remains a valid fallback. Port 3000 runs only
+the callback handler and never the management app or a file server. Localhost is the
+preferred single-user route where the TikTok portal accepts it. Do not resubmit an app
+solely to switch redirect URL while approval is pending.
+
+The authorization URL must be copied from TikTok My Apps. `oauth-start` preserves its
+portal parameters and replaces only the one-time state. The callback stores no raw state
+and never logs or displays the authorization code or token. Any email verification code
+is entered only on TikTok's page.
+
+## Remaining acceptance gates
+
+1. After app approval, validate the generated advertiser authorization URL, exact scope,
+   advertiser binding, hierarchy reads, report fields, timezone, attribution, and Ads
+   Manager reconciliation.
+2. Activate staged skills incrementally only after their typed backend, tools, fixture,
+   wire tests, and platform evidence exist.
+3. Add golden conversations when each staged workflow becomes executable; staged
+   documentation is not a runnable capability.
+4. Treat live writes as a separate project gate with a controlled object, explicit cap,
+   per-change approval, and unknown-outcome reconciliation.
+
+## Reproduction
 
 ```sh
 make cli
 make test
-./bin/ad-agent chat --runtime j --session diagnosis-j --json --message '以 fixture 最新日期为锚点，比较近 7 天与前 7 天 campaign ROAS，调用分析子代理并展示计算证据，不创建草案。'
+./bin/ad-agent chat --runtime j --session diagnosis-j --json --message 'Compare the latest seven days with the prior seven days at campaign level. Use the analysis delegate, cite computed evidence, and do not create a draft.'
 ```
 
-历史探针可使用仓库锁定 SDK：
+The optional historical Pi probe consumes ChatGPT quota:
 
 ```sh
 node scripts/check-pi-readiness.mjs "$PWD/node_modules/@earendil-works/pi-coding-agent/dist/index.js"
 ```
 
-该探针使用固定版本内部初始化入口，仅供诊断；产品 sidecar 不依赖它。
-
-## 回调与隧道
-
-用户已登记一个 HTTPS ngrok 根路径回调；真实地址由本机配置提供，不写入仓库。既有
-隧道指向 localhost:3000，该端口不能暴露完整管理页面、文件服务器或调试器。
-TikTok 当前官方 [Authorization 文档](https://business-api.tiktok.com/portal/docs?id=1738373141733378)
-明确允许最多 10 个 advertiser redirect URL，包括 localhost。因此本地单用户首选
-`http://localhost:3000/`，ngrok 仅作为备用；应用
-正在审核时不为切换地址重复提交。应用获批与回调可达是两个独立条件。
-
-| 本地监听       | 用途                          | 状态                                                 |
-| -------------- | ----------------------------- | ---------------------------------------------------- |
-| loopback:8080  | Go 主应用/API，构建后的 React | 已实现；本机当前被其他服务占用时用其他 loopback 端口 |
-| loopback:5173  | React 开发服务器              | 已配置；生产验收使用 Go 同源静态资源                 |
-| localhost:3000 | callback-only mux             | 已实现并测试；仅授权时显式启用                       |
-
-`oauth-start` 只接受从 TikTok My Apps 复制的 `business-api.tiktok.com` 或 `ads.tiktok.com`
-HTTPS 授权 URL，保留 portal 参数并替换一次性 state；不猜测授权 endpoint。回调使用
-256-bit 高熵、最长 15 分钟、一次性 state；SQLite 只保存 hash，并绑定连接
-意图和准确 redirect URL。拒绝过期、重放和无效 state，不记录/回显 code/token/query；
-响应 no-store/no-referrer/CSP。若使用 ngrok，真实授权前关闭请求检查并核对 capture/
-retention；localhost 不经过公网隧道，风险面更小。官方 [Authentication 文档](https://business-api.tiktok.com/portal/docs?id=1738373164380162)
-规定 `auth_code` 一小时且仅能使用一次；由程序直接换 token。TikTok 页面可能要求广告主
-输入邮件验证码，验证码只在 TikTok 页面输入，用户无需向本项目或聊天复制任何确认码。
-
-## 尚需完成的验收
-
-1. CLI：读取、分析、草案、独立审批和恢复已通过；长对话压缩与 provider 故障矩阵留到可靠性阶段压力验收。
-2. Harness：显式 memory 生命周期、分析资源预算和 parent/child usage 汇总已完成；仍需以
-   golden conversations 调整 grounding/follow-through 策略，不能只靠关键词硬编码意图。
-3. MAPI：本地 adapter/callback 已完成；待 app approval 后验证真实 scopes、官方
-   Advertiser authorization URL、advertiser binding、报表字段和 Ads Manager 对账。
-4. Web：已完成首版同源登录、CSRF、SSE 重放、React 页面、普通及真模型 Playwright E2E；
-   MAPI 环境 E2E 受 app approval 阻塞，无障碍审计留到真实产品 UI 阶段。
-5. Review：首版安全/质量审查、依赖许可、CI、私有仓库以及 J runtime 完整回归均已完成。
-6. J runtime：实际 model/tool loop、私有 native continuation、CLI/Web/analysis child 已验证；
-   长对话及故障矩阵仍属于后续可靠性工作，不阻塞首版开发完成。
-
-## 以后需要用户参与
-
-- 真实只读：应用获批后，在 My Apps 取得 TikTok 生成的 Advertiser authorization URL，
-  选择 redirect URL 和 advertiser 并由用户本人完成授权。App ID/Secret 仅在本机配置；
-  TikTok 邮件验证码仅在 TikTok 页面输入；验证码、`auth_code`、token 不发送到聊天。
-  目前无需用户提供确认码。
-- 真实写入：明确受控测试对象、预算上限和启停范围，每条单独审批。开发不等于花费授权。
-- 远端发布：仓库保持私有；公开发布或添加许可证需要另行明确决定。
+It diagnoses the pinned SDK transport only; it does not prove the product stack.

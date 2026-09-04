@@ -21,9 +21,15 @@ const (
 
 type Memory struct {
 	ID        string     `json:"id"`
+	Key       string     `json:"key,omitempty"`
 	Kind      MemoryKind `json:"kind"`
 	Text      string     `json:"text"`
 	CreatedAt time.Time  `json:"created_at"`
+}
+
+func validMemory(key string, kind MemoryKind, text string) bool {
+	return kind.valid() && text != "" && len(text) <= 500 && !strings.ContainsAny(text, "\r\n") &&
+		len(key) <= 64 && !strings.ContainsAny(key, "\r\n")
 }
 
 func (k MemoryKind) valid() bool {
@@ -42,7 +48,7 @@ func memorySourceKey(source ads.Source) (string, error) {
 // Product policy decides when to call this method; storage does not infer memories.
 func (s *Store) SaveMemory(ctx context.Context, source ads.Source, kind MemoryKind, text string) (Memory, error) {
 	text = strings.TrimSpace(text)
-	if !kind.valid() || text == "" || len(text) > 500 || strings.ContainsAny(text, "\r\n") {
+	if !validMemory("", kind, text) {
 		return Memory{}, errors.New("invalid_memory")
 	}
 	key, err := memorySourceKey(source)
@@ -58,6 +64,68 @@ func (s *Store) SaveMemory(ctx context.Context, source ads.Source, kind MemoryKi
 		"INSERT INTO memories(id,source,text,created_at) VALUES(?,?,?,?)",
 		m.ID, key, payload, m.CreatedAt.Format(time.RFC3339Nano))
 	return m, err
+}
+
+// UpsertMemory stores an extracted durable fact under a stable, account-scoped key.
+// Explicit memories remain append-only through SaveMemory; only the post-turn extractor
+// uses keyed replacement so an updated standing rule does not accumulate stale copies.
+func (s *Store) UpsertMemory(ctx context.Context, source ads.Source, factKey string, kind MemoryKind, text string) (Memory, error) {
+	factKey = strings.ToLower(strings.TrimSpace(factKey))
+	factKey = strings.Join(strings.Fields(factKey), "_")
+	text = strings.TrimSpace(text)
+	if factKey == "" || !validMemory(factKey, kind, text) {
+		return Memory{}, errors.New("invalid_memory")
+	}
+	sourceKey, err := memorySourceKey(source)
+	if err != nil {
+		return Memory{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Memory{}, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.QueryContext(ctx, "SELECT id,text FROM memories WHERE source=? ORDER BY created_at DESC,id DESC", sourceKey)
+	if err != nil {
+		return Memory{}, err
+	}
+	var existingID string
+	for rows.Next() {
+		var id string
+		var payload []byte
+		var memory Memory
+		if err = rows.Scan(&id, &payload); err != nil {
+			rows.Close()
+			return Memory{}, err
+		}
+		if json.Unmarshal(payload, &memory) == nil && memory.Key == factKey {
+			existingID = id
+			break
+		}
+	}
+	if closeErr := rows.Close(); err == nil && closeErr != nil {
+		return Memory{}, closeErr
+	}
+	if err = rows.Err(); err != nil {
+		return Memory{}, err
+	}
+	memory := Memory{ID: existingID, Key: factKey, Kind: kind, Text: text, CreatedAt: time.Now().UTC()}
+	if memory.ID == "" {
+		memory.ID = ID("memory")
+	}
+	payload, err := json.Marshal(memory)
+	if err != nil {
+		return Memory{}, err
+	}
+	if existingID == "" {
+		_, err = tx.ExecContext(ctx, "INSERT INTO memories(id,source,text,created_at) VALUES(?,?,?,?)", memory.ID, sourceKey, payload, memory.CreatedAt.Format(time.RFC3339Nano))
+	} else {
+		_, err = tx.ExecContext(ctx, "UPDATE memories SET text=?,created_at=? WHERE id=? AND source=?", payload, memory.CreatedAt.Format(time.RFC3339Nano), memory.ID, sourceKey)
+	}
+	if err != nil {
+		return Memory{}, err
+	}
+	return memory, tx.Commit()
 }
 
 func (s *Store) Memories(ctx context.Context, source ads.Source, limit int) ([]Memory, error) {

@@ -6,6 +6,7 @@ build:
 	npm run build
 	go build -o bin/ad-agent ./cmd/ad-agent
 test:
+	./scripts/check-english.sh
 	go test -race ./...
 	npm run build --workspaces --if-present
 	npm test --workspaces --if-present

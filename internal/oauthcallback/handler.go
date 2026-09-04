@@ -104,5 +104,5 @@ func (h *Handler) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(successPage))
 }
 
-const successPage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>授权完成</title><style>body{font:16px system-ui;margin:3rem;max-width:36rem}h1{font-size:1.5rem}</style><h1>TikTok 授权已保存</h1><p>请关闭此页面，回到本机 Ad Agent 继续。</p>`
-const failurePage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>授权未完成</title><style>body{font:16px system-ui;margin:3rem;max-width:36rem}h1{font-size:1.5rem}</style><h1>TikTok 授权未完成</h1><p>请关闭此页面，并从本机 Ad Agent 重新开始连接。</p>`
+const successPage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorization complete</title><style>body{font:16px system-ui;margin:3rem;max-width:36rem}h1{font-size:1.5rem}</style><h1>TikTok authorization saved</h1><p>Close this page and return to the local Ad Agent.</p>`
+const failurePage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Authorization incomplete</title><style>body{font:16px system-ui;margin:3rem;max-width:36rem}h1{font-size:1.5rem}</style><h1>TikTok authorization was not completed</h1><p>Close this page and restart the connection from the local Ad Agent.</p>`

@@ -1,0 +1,219 @@
+{
+  "version": "1",
+  "skills": [
+    {
+      "name": "account-readiness",
+      "status": "active",
+      "description": "Checking advertiser identity, currency, timezone, environment, data freshness, permissions, and known capability limits before operational work.",
+      "official_api_areas": ["Authentication", "Account Management"],
+      "required_tools": ["get_advertiser_context"]
+    },
+    {
+      "name": "daily-account-briefing",
+      "status": "active",
+      "description": "Producing a prioritized start-of-day briefing from current delivery, performance, account limitations, and pending changes.",
+      "official_api_areas": ["Reporting", "Campaign Creation", "Adgroup", "Ad"],
+      "required_tools": [
+        "get_advertiser_context",
+        "get_performance_report",
+        "list_campaigns",
+        "get_pending_changes",
+        "present_digest"
+      ]
+    },
+    {
+      "name": "campaign-structure-audit",
+      "status": "active",
+      "description": "Auditing campaign, ad group, and ad hierarchy for disabled parents, orphaned delivery, budget placement, and scope mismatches.",
+      "official_api_areas": ["Campaign Creation", "Adgroup", "Ad"],
+      "required_tools": [
+        "list_campaigns",
+        "list_ad_groups",
+        "list_ads",
+        "get_entity"
+      ]
+    },
+    {
+      "name": "performance-monitoring",
+      "status": "active",
+      "description": "Summarizing KPI health, pacing, trends, and goal progress from comparable TikTok reporting windows without causal diagnosis.",
+      "official_api_areas": ["Reporting"],
+      "required_tools": [
+        "get_advertiser_context",
+        "get_performance_report",
+        "present_metrics"
+      ]
+    },
+    {
+      "name": "performance-diagnosis",
+      "status": "active",
+      "description": "Explaining a performance movement through bounded period comparisons, rankings, contribution analysis, counter-evidence, and data limitations.",
+      "official_api_areas": ["Reporting"],
+      "required_tools": [
+        "get_performance_report",
+        "run_analysis",
+        "present_metrics"
+      ]
+    },
+    {
+      "name": "budget-operations",
+      "status": "active",
+      "description": "Reviewing budget pacing and preparing one bounded campaign or ad group budget draft for host approval.",
+      "official_api_areas": ["Campaign Creation", "Adgroup", "Reporting"],
+      "required_tools": [
+        "get_entity",
+        "get_performance_report",
+        "stage_budget_change",
+        "present_change_preview"
+      ]
+    },
+    {
+      "name": "delivery-operations",
+      "status": "active",
+      "description": "Investigating delivery state across campaign parents and preparing a narrowly scoped enable or disable draft for host approval.",
+      "official_api_areas": ["Campaign Creation", "Adgroup", "Ad"],
+      "required_tools": [
+        "get_entity",
+        "list_campaigns",
+        "list_ad_groups",
+        "list_ads",
+        "stage_status_change"
+      ]
+    },
+    {
+      "name": "creative-performance",
+      "status": "active",
+      "description": "Finding weak or promising ads from ad-level performance and separating a measured creative lead from an unsupported creative cause.",
+      "official_api_areas": ["Ad", "Reporting", "Creative Management"],
+      "required_tools": [
+        "list_ads",
+        "get_performance_report",
+        "run_analysis",
+        "present_entities"
+      ]
+    },
+    {
+      "name": "change-governance",
+      "status": "active",
+      "description": "Reviewing, explaining, reconciling, or discarding staged changes while preserving independent host approval and audit semantics.",
+      "official_api_areas": ["Campaign Creation", "Adgroup", "Ad"],
+      "required_tools": [
+        "get_pending_changes",
+        "discard_change",
+        "present_change_preview"
+      ]
+    },
+    {
+      "name": "campaign-building",
+      "status": "staged",
+      "description": "Planning and staging objective-specific campaigns, ad groups, ads, schedules, placements, bids, and validation prerequisites.",
+      "official_api_areas": ["Campaign Creation", "Adgroup", "Ad", "Tool"],
+      "required_tools": ["get_campaign_prerequisites", "stage_campaign_bundle"]
+    },
+    {
+      "name": "targeting-and-audiences",
+      "status": "staged",
+      "description": "Inspecting targeting, overlap, saved and custom audiences, lookalikes, exclusions, and privacy-safe audience readiness.",
+      "official_api_areas": ["Audience", "Recommend Tool", "Tool"],
+      "required_tools": [
+        "list_audiences",
+        "get_audience",
+        "get_audience_overlap",
+        "get_targeting_options"
+      ]
+    },
+    {
+      "name": "creative-and-identity-operations",
+      "status": "staged",
+      "description": "Reviewing identities and creative assets, creative review state, reuse candidates, and ad creative drafts without fabricating claims.",
+      "official_api_areas": [
+        "Creative Management",
+        "File",
+        "Identity",
+        "Ad ACO"
+      ],
+      "required_tools": [
+        "list_identities",
+        "list_creative_assets",
+        "get_creative_review",
+        "stage_ad_creative"
+      ]
+    },
+    {
+      "name": "measurement-and-attribution",
+      "status": "staged",
+      "description": "Auditing pixels, app and offline event sources, event activity, attribution assumptions, and optimization-event readiness.",
+      "official_api_areas": ["Measurement", "App Management", "Reporting"],
+      "required_tools": [
+        "list_event_sources",
+        "get_event_stats",
+        "get_optimization_events",
+        "get_attribution_settings"
+      ]
+    },
+    {
+      "name": "automated-rules",
+      "status": "staged",
+      "description": "Auditing automated rules and execution history, then staging bounded rule or binding changes with conflict checks.",
+      "official_api_areas": ["Automated Rules"],
+      "required_tools": [
+        "list_automated_rules",
+        "get_automated_rule_results",
+        "stage_automated_rule"
+      ]
+    },
+    {
+      "name": "comment-moderation",
+      "status": "staged",
+      "description": "Triaging ad comments, drafting grounded replies, and staging hide, unhide, delete, reply, or blocked-word actions.",
+      "official_api_areas": ["Comments"],
+      "required_tools": [
+        "list_ad_comments",
+        "get_related_comments",
+        "stage_comment_action"
+      ]
+    },
+    {
+      "name": "catalog-commerce",
+      "status": "staged",
+      "description": "Monitoring catalog, feed, product, product-set, and catalog-video health for commerce and dynamic product ads.",
+      "official_api_areas": ["Catalog"],
+      "required_tools": [
+        "list_catalogs",
+        "get_catalog_feed_health",
+        "get_catalog_product_health"
+      ]
+    },
+    {
+      "name": "billing-and-account-finance",
+      "status": "staged",
+      "description": "Monitoring account balance, budget, transaction, and billing readiness without initiating transfers or changing payment authority.",
+      "official_api_areas": ["Business Center", "Business Center Payment"],
+      "required_tools": [
+        "get_account_balance",
+        "list_account_transactions",
+        "get_billing_readiness"
+      ]
+    },
+    {
+      "name": "smart-plus-and-gmv-max",
+      "status": "staged",
+      "description": "Reviewing Smart Plus and GMV Max campaigns, materials, stores, videos, identities, reports, and product-level readiness.",
+      "official_api_areas": [
+        "Campaign Creation",
+        "Adgroup",
+        "Ad",
+        "Reporting",
+        "Store",
+        "Video",
+        "Identity"
+      ],
+      "required_tools": [
+        "list_smart_plus_campaigns",
+        "get_smart_plus_report",
+        "get_material_report",
+        "get_gmv_max_readiness"
+      ]
+    }
+  ]
+}

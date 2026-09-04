@@ -23,6 +23,7 @@ type ToolResult struct {
 	OK    bool            `json:"ok"`
 	Data  json.RawMessage `json:"data,omitempty"`
 	Error string          `json:"error,omitempty"`
+	Close bool            `json:"close,omitempty"`
 }
 
 func Value(v any) ToolResult {
@@ -55,12 +56,16 @@ type Result struct {
 	Usage      Usage  `json:"usage"`
 }
 type Event struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type      string          `json:"type"`
+	ID        string          `json:"id,omitempty"`
+	Name      string          `json:"name,omitempty"`
+	Text      string          `json:"text,omitempty"`
+	Arguments json.RawMessage `json:"arguments,omitempty"`
 }
 type Hooks struct {
-	Execute func(context.Context, Call) ToolResult
-	Emit    func(Event)
+	Execute    func(context.Context, Call) ToolResult
+	Emit       func(Event)
+	CloseAfter func(Call, ToolResult) bool
 }
 type Runtime interface {
 	Run(context.Context, Request, Hooks) (Result, error)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -66,6 +67,33 @@ func TestJMarksBackstopAsBudgetExhausted(t *testing.T) {
 	}
 	if result.Stop != "budget" || result.Text != "done" {
 		t.Fatalf("result=%#v", result)
+	}
+}
+
+func TestJDispatchesIndependentCallsConcurrently(t *testing.T) {
+	entry, _ := filepath.Abs("testdata/j-model-bridge.mjs")
+	started := 0
+	var mu sync.Mutex
+	both := make(chan struct{})
+	result, err := (J{Entry: entry}).Run(context.Background(), Request{
+		System: "system", Prompt: "parallel", MaxRounds: 3,
+		Tools: []Tool{{Name: "read_data", Description: "read", Parameters: json.RawMessage(`{"type":"object"}`)}},
+	}, Hooks{Execute: func(ctx context.Context, call Call) ToolResult {
+		mu.Lock()
+		started++
+		if started == 2 {
+			close(both)
+		}
+		mu.Unlock()
+		select {
+		case <-both:
+			return Value(call.ID)
+		case <-time.After(time.Second):
+			return Failure("calls_were_serial")
+		}
+	}})
+	if err != nil || result.Stop != "stop" || started != 2 {
+		t.Fatalf("result=%#v started=%d err=%v", result, started, err)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/z-chenhao/ad-agent/internal/ads"
+	"github.com/z-chenhao/ad-agent/internal/agenthost"
 	"github.com/z-chenhao/ad-agent/internal/app"
 	"github.com/z-chenhao/ad-agent/internal/store"
 	"io"
@@ -134,8 +135,9 @@ func (s *Server) Handler() http.Handler {
 	}))
 	mux.HandleFunc("GET /api/v1/config", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		writeJSON(w, 200, struct {
-			Runtime string `json:"runtime"`
-		}{s.App.Runtime})
+			Runtime string                  `json:"runtime"`
+			Harness agenthost.PublicHarness `json:"harness"`
+		}{s.App.Runtime, s.App.Host.PublicHarness()})
 	}))
 	mux.HandleFunc("POST /api/v1/logout", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		c, _ := r.Cookie("ad_session")
@@ -185,6 +187,15 @@ func (s *Server) Handler() http.Handler {
 		}
 		v, e := s.App.Store.Changes(r.Context(), session.ID)
 		respond(w, v, e)
+	}))
+	mux.HandleFunc("GET /api/v1/memories", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
+		account, err := s.App.Backend.Account(r.Context())
+		if err != nil {
+			respond(w, nil, err)
+			return
+		}
+		memories, err := s.App.Store.Memories(r.Context(), account.Source, 50)
+		respond(w, memories, err)
 	}))
 	mux.HandleFunc("POST /api/v1/changes/{id}/{action}", s.authorize(s.change))
 	mux.HandleFunc("POST /api/v1/agent/turn", s.authorize(s.turn))

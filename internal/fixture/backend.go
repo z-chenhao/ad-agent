@@ -88,7 +88,7 @@ func FromJSON(b []byte) (*Backend, error) {
 		return nil, errors.New("invalid account timezone")
 	}
 	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: d.Account.ID}
-	f := &Backend{account: ads.Account{ID: d.Account.ID, Name: d.Account.Name, Currency: d.Account.Currency, Timezone: d.Account.Timezone, LatestDate: d.Account.Latest, Source: source, Limitations: []string{"官方请求示例字段补充了合成投放数据；不是真实广告账户。", "固定历史窗口：2022-07-04 至 2022-07-17；购买价值及归因是合成数据。"}}, entities: map[string]ads.Entity{}}
+	f := &Backend{account: ads.Account{ID: d.Account.ID, Name: d.Account.Name, Currency: d.Account.Currency, Timezone: d.Account.Timezone, LatestDate: d.Account.Latest, Source: source, Limitations: []string{"Official request-example fields are supplemented with synthetic delivery data; this is not a real advertiser.", "Fixed historical window: 2022-07-04 through 2022-07-17; purchase value and attribution are synthetic."}}, entities: map[string]ads.Entity{}}
 	for _, group := range []struct {
 		level ads.Level
 		items []wireEntity
@@ -194,7 +194,7 @@ func (f *Backend) Report(ctx context.Context, q ads.ReportQuery) (ads.Report, er
 	defer f.mu.RUnlock()
 	r := ads.Report{Source: f.account.Source, Query: q, Currency: f.account.Currency, Timezone: f.account.Timezone, Attribution: "fixture: synthetic purchase value; not a verified MAPI revenue mapping", FetchedAt: time.Now().UTC(), Complete: q.Start >= "2022-07-04" && q.End <= "2022-07-17", Limitations: append([]string{}, f.account.Limitations...), Rows: []ads.Row{}, Totals: ads.ZeroMetrics()}
 	if !r.Complete {
-		r.Limitations = append(r.Limitations, "请求日期超出合成数据覆盖范围。")
+		r.Limitations = append(r.Limitations, "The requested dates extend beyond synthetic data coverage.")
 	}
 	if q.EntityID != "" && q.Level != ads.Advertiser {
 		e, ok := f.entities[q.EntityID]
@@ -229,7 +229,7 @@ func (f *Backend) Report(ctx context.Context, q ads.ReportQuery) (ads.Report, er
 		}
 	}
 	if !r.Complete {
-		r.Limitations = append(r.Limitations, "缺少广告/日期覆盖；缺失行不能视为已确认的零值。")
+		r.Limitations = append(r.Limitations, "Ad or date coverage is missing; absent rows are not confirmed zero values.")
 	}
 	groups := map[string]ads.Row{}
 	for _, row := range f.rows {

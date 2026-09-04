@@ -15,7 +15,7 @@ export interface Start {
 export interface Reply {
   type: "tool_result";
   id: string;
-  result: { ok: boolean; data?: unknown; error?: string };
+  result: { ok: boolean; data?: unknown; error?: string; close?: boolean };
 }
 export function parseInput(line: string): Start | Reply {
   if (Buffer.byteLength(line) > 1_048_576) throw new Error("frame_limit");

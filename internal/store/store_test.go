@@ -70,7 +70,7 @@ func TestMemoryLifecycleIsSourceScoped(t *testing.T) {
 	defer s.Close()
 	ctx := context.Background()
 	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "account-a"}
-	m, err := s.SaveMemory(ctx, source, MemoryConstraint, "预算调整一次不超过 10%")
+	m, err := s.SaveMemory(ctx, source, MemoryConstraint, "Limit each budget change to 10%")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +118,39 @@ func TestMemoryValidation(t *testing.T) {
 	}
 	if _, err = s.Memories(context.Background(), source, 51); err == nil {
 		t.Fatal("invalid limit accepted")
+	}
+}
+
+func TestExtractedMemoryUpsertsBySourceAndKey(t *testing.T) {
+	dir := t.TempDir()
+	os.Chmod(dir, 0700)
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	ctx := context.Background()
+	source := ads.Source{Backend: "fixture", Environment: "fixture", AccountID: "account-a"}
+	first, err := s.UpsertMemory(ctx, source, "budget guardrail", MemoryConstraint, "Keep budget changes below 10%")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.UpsertMemory(ctx, source, "budget_guardrail", MemoryConstraint, "Keep each budget change at or below 8%")
+	if err != nil {
+		t.Fatal(err)
+	}
+	memories, err := s.Memories(ctx, source, 50)
+	if err != nil || len(memories) != 1 {
+		t.Fatalf("memories = %#v, err = %v", memories, err)
+	}
+	if first.ID != second.ID || memories[0].Text != "Keep each budget change at or below 8%" || memories[0].Key != "budget_guardrail" {
+		t.Fatalf("keyed memory did not replace: first=%#v second=%#v stored=%#v", first, second, memories[0])
+	}
+	other := source
+	other.AccountID = "account-b"
+	third, err := s.UpsertMemory(ctx, other, "budget_guardrail", MemoryConstraint, "Keep changes below 5%")
+	if err != nil || third.ID == first.ID {
+		t.Fatalf("source-scoped memory collided: %#v %v", third, err)
 	}
 }
 

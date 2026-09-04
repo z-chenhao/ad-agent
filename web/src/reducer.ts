@@ -43,6 +43,20 @@ export function reduceEvent(state: Live, event: Event): Live {
       const c = event.data as Card;
       return {
         ...next,
+        cards: [
+          ...next.cards.filter(
+            (x) => x.id !== c.id && !(x.pending && x.type === c.type),
+          ),
+          c,
+        ],
+      };
+    }
+    case "ui.partial": {
+      const c = event.data as Card;
+      if (!c.type || next.cards.some((x) => x.type === c.type && !x.pending))
+        return next;
+      return {
+        ...next,
         cards: [...next.cards.filter((x) => x.id !== c.id), c],
       };
     }

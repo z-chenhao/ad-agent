@@ -1,40 +1,57 @@
-# Ad Agent 工程约定
+# Ad Agent engineering instructions
 
-本文件面向开发仓库的 coding agent；`AGENT.md` 是产品广告代理的静态合同。
-默认中文沟通。修改前阅读：
+This file is for coding agents working in this repository. `AGENT.md` is the static
+operating contract for the advertising agent. Communicate with the repository owner
+in their chosen language, but keep all repository artifacts and product UI in English.
+
+Read these documents before making changes:
 
 - `docs/technical-design-v0.md`
 - `docs/ad-backend-contract.md`
 - `docs/development-readiness.md`
+- `docs/tiktok-workflow-coverage.md` for workflow or TikTok capability changes
 
-## 边界
+## Boundaries
 
-- Go 拥有领域、AdBackend、executor、snapshot、审批、审计和 HTTP/SSE。
-- React/TypeScript 拥有页面；Pi sidecar 负责 Pi session，J-agent 在 Go 内负责另一套
-  model/tool loop，J 的 TypeScript bridge 仅负责 provider/OAuth transport。
-- AdBackend 首版只读，TikTok MAPI 与 fixture 分别实现，runtime 独立替换。
-- host change service 独占 writer；模型无 apply 工具，聊天不是审批。
-- 身份/环境由 host 绑定；fixture 不回退真实错误，也不冒充 live 数据。
-- 两个 runtime 都显式选择 openai-codex/gpt-5.6-luna，不静默换模型或修改全局默认设置。
-- 显式初始化 Pi 网络层；Pi runtime 禁用默认编码工具和自动 contexts/extensions/skills/prompts，
-  J runtime 只注册 Go host 给出的广告工具。
-- API 凭证不进入模型业务上下文、SSE、日志或 Git；provider transcript 保持私有。
-- 3000 仅用于隔离回调，不启动完整管理应用或文件服务器；官方支持 localhost，ngrok
-  仅作备用，真实 redirect URL 由本机配置提供。
-- fixture/mock/sandbox/live、设计/实现/测试通过必须区分。
+- Go owns the domain, AdBackend, executor, snapshots, approvals, audit, HTTP, and SSE.
+- React/TypeScript owns the UI. The Pi sidecar owns Pi sessions; J-agent owns a second
+  model/tool loop in Go; J's TypeScript bridge only provides provider/OAuth transport.
+- TikTok MAPI and fixture separately implement AdBackend. Runtime and backend remain
+  independent replacement axes.
+- The host change service is the only writer. The model has no apply tool; chat is not
+  approval.
+- The host binds identity and environment. Fixture never masks a live error or claims
+  to be live data.
+- Both runtimes explicitly select `openai-codex/gpt-5.6-luna`. Never silently change
+  the model or the user's global defaults.
+- Explicitly initialize Pi networking. Disable default coding tools and automatic Pi
+  contexts, extensions, skills, and prompts. J exposes only advertising tools supplied
+  by the Go host.
+- Credentials never enter model business context, SSE, logs, or Git. Provider
+  transcripts remain private.
+- Port 3000 serves only the isolated OAuth callback. Localhost is preferred; ngrok is
+  a fallback. The actual redirect URL comes from local configuration.
+- Always distinguish fixture, HTTP fake, sandbox, and live evidence, and distinguish
+  design, implementation, test, and platform validation.
 
-## 变更与验证
+## Change and validation rules
 
-- 先检查文件和 Git 状态，保护已有变更，不自行提交、推送或公开仓库。
-- 只改当前任务，不预建通用广告平台或插件框架。Pi 与 J 共用 repo-private runtime seam；
-  J-agent 必须真正拥有 model/tool loop，不能把完整 Pi loop 包装器称为 J 接入。
-- 当前已交付 fixture + Go/Pi/J 工具桥 + 只读分析 + React 的运行闭环。
-- 不创建/启用真实广告、修改预算/权限，除非当前任务另有明确授权及产品审批。
-- 覆盖成功、拒绝、缺失/部分数据、取消/超时；未知写结果禁止盲重试。
-- 产品工程已初始化；当前可运行 Pi/J CLI/Web 与本地 MAPI wire tests，真实 MAPI 状态见
-  验收记录，不把 HTTP fake 推断成真实账户可用。
+- Inspect files and Git state first. Preserve existing work. Do not commit, push, or
+  publish without an explicit request.
+- Change only the current scope. Do not prebuild a universal advertising platform or
+  plugin framework.
+- Active skills must name only installed tools. Put official but unsupported workflows
+  under `skills/_staged`; do not expose them through `load_skill`.
+- J-agent must own a real model/tool loop; a wrapper around the full Pi loop is not a J
+  integration.
+- Do not create or enable live ads, change live budgets, or alter permissions without
+  explicit scope and product approval.
+- Cover success, rejection, missing or partial data, cancellation, and timeout. Never
+  blindly retry an unknown write outcome.
+- Local Pi/J CLI and Web loops plus MAPI wire tests are implemented. Consult the
+  readiness record before making any live-data claim.
 
-当前构建与测试：
+Current baseline:
 
 ```sh
 make cli
@@ -42,5 +59,6 @@ make test
 ./bin/ad-agent inspect
 ```
 
-真实模型探针命令见 `docs/development-readiness.md`，会使用用户 ChatGPT 额度。
-探针通过不代表 Go bridge、分析子代理、React 或 MAPI 已通过验收。
+Live-model probes in `docs/development-readiness.md` consume the user's ChatGPT quota.
+A probe does not prove that the Go bridge, analysis delegate, React UI, or MAPI passed
+its own acceptance gate.

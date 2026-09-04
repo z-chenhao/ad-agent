@@ -37,7 +37,9 @@ export async function streamTurn(
     signal,
   });
   if (!response.ok || !response.body)
-    throw new Error("无法开始会话，请检查登录状态");
+    throw new Error(
+      "Unable to start the session. Check the local login state.",
+    );
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -61,13 +63,19 @@ export async function streamTurn(
           emit(event);
           if (event.type === "turn.completed") terminal = true;
         } else if (!terminal)
-          throw new Error("本轮失败，请刷新会话查看已保存状态");
+          throw new Error(
+            "The turn failed. Refresh the session to inspect saved state.",
+          );
       }
-      if (buffer.length > 1_048_576) throw new Error("事件超出大小限制");
+      if (buffer.length > 1_048_576)
+        throw new Error("Event stream exceeded the size limit.");
       if (done) break;
     }
   } finally {
     reader.releaseLock();
   }
-  if (!terminal) throw new Error("连接中断；未确认成功，可刷新会话恢复记录");
+  if (!terminal)
+    throw new Error(
+      "Connection interrupted; success is unconfirmed. Refresh to recover saved records.",
+    );
 }

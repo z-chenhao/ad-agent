@@ -17,18 +17,18 @@ input.on("line", (line) => {
   if (last?.role === "user" && last.content?.[0]?.text === "hang") return;
   const hasAssistant = messages.some((message) => message.role === "assistant");
   if (!hasAssistant && (frame.request.tools?.length ?? 0) > 0) {
+    const userText = messages.findLast((message) => message.role === "user")
+      ?.content?.[0]?.text;
+    const calls =
+      userText === "parallel"
+        ? [
+            { id: "call-1", name: "read_data", arguments: { key: "one" } },
+            { id: "call-2", name: "read_data", arguments: { key: "two" } },
+          ]
+        : [{ id: "call-1", name: "read_data", arguments: { key: "value" } }];
     const message = {
       role: "assistant",
-      content: [
-        {
-          type: "tool_call",
-          toolCall: {
-            id: "call-1",
-            name: "read_data",
-            arguments: { key: "value" },
-          },
-        },
-      ],
+      content: calls.map((toolCall) => ({ type: "tool_call", toolCall })),
     };
     state.assistants.push({ fake: "tool" });
     send({

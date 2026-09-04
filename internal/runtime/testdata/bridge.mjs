@@ -12,6 +12,14 @@ rl.on("line", (line) => {
       return;
     }
     if (v.prompt === "wait") return;
+    if (v.prompt === "partial") {
+      send({
+        type: "tool_delta",
+        id: "one",
+        name: "present_metrics",
+        arguments: { record_id: "report" },
+      });
+    }
     send({
       type: "tool_call",
       id: "one",

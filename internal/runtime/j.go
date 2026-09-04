@@ -91,7 +91,7 @@ func (j J) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 			Name: tool.Name, Description: tool.Description, InputSchema: append(json.RawMessage(nil), tool.Parameters...),
 		}, state: state})
 	}
-	bounded := &jBoundedModel{inner: model, maxRounds: r.MaxRounds}
+	bounded := &jBoundedModel{inner: model, maxRounds: r.MaxRounds, state: state}
 	options := []jagent.Option{jagent.WithTools(tools...)}
 	if len(checkpoint.History) > 0 {
 		options = append(options, jagent.WithHistory(checkpoint.History...))
@@ -111,8 +111,17 @@ func (j J) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 				state.current = cloneJCall(*event.ToolCall)
 			}
 		case jagent.EventMessageDelta:
-			if event.Delta != nil && event.Delta.Type == jagent.DeltaText && h.Emit != nil {
-				h.Emit(Event{Type: "text.delta", Text: event.Delta.Delta})
+			if event.Delta != nil && h.Emit != nil {
+				switch event.Delta.Type {
+				case jagent.DeltaText:
+					h.Emit(Event{Type: "text.delta", Text: event.Delta.Delta})
+				case jagent.DeltaToolCall:
+					h.Emit(Event{Type: "tool.delta", ID: event.Delta.ToolCallID, Name: event.Delta.ToolName, Arguments: json.RawMessage(event.Delta.Delta)})
+				}
+			}
+		case jagent.EventMessageCompleted:
+			if event.Message != nil {
+				state.prefetch(ctx, event.Message.ToolCalls())
 			}
 		}
 	})
@@ -159,6 +168,7 @@ type jBoundedModel struct {
 	maxRounds int
 	calls     int
 	budget    bool
+	state     *jToolState
 }
 
 func (m *jBoundedModel) Complete(ctx context.Context, req jagent.ModelRequest, emit func(jagent.ModelDelta)) (jagent.ModelResponse, error) {
@@ -168,6 +178,8 @@ func (m *jBoundedModel) Complete(ctx context.Context, req jagent.ModelRequest, e
 	}
 	if m.calls > m.maxRounds {
 		m.budget = true
+		req.Tools = nil
+	} else if m.state.close {
 		req.Tools = nil
 	}
 	response, err := m.inner.Complete(ctx, req, emit)
@@ -198,6 +210,41 @@ type jToolState struct {
 	current   *jagent.ToolCall
 	seen      map[string]bool
 	err       error
+	close     bool
+	mu        sync.Mutex
+	prepared  map[string]ToolResult
+}
+
+// prefetch executes calls emitted together as one model response concurrently. Calls in
+// one response cannot depend on each other's results; dependent work must remain in
+// separate model rounds. The Go host independently serializes every mutation family.
+func (s *jToolState) prefetch(ctx context.Context, calls []jagent.ToolCall) {
+	if len(calls) < 2 || s.round < 1 || s.round > s.maxRounds || s.calls+len(calls) > 64 {
+		return
+	}
+	var wait sync.WaitGroup
+	for _, original := range calls {
+		call := cloneJCall(original)
+		wait.Go(func() {
+			result := Failure("tool_unavailable")
+			runtimeCall := Call{ID: call.ID, Name: call.Name, Arguments: append(json.RawMessage(nil), call.Arguments...), Round: s.round}
+			if s.hooks.Execute != nil {
+				result = s.hooks.Execute(ctx, runtimeCall)
+			}
+			closes := result.OK && s.hooks.CloseAfter != nil && s.hooks.CloseAfter(runtimeCall, result)
+			if closes {
+				result.Close = true
+			}
+			s.mu.Lock()
+			if s.prepared == nil {
+				s.prepared = make(map[string]ToolResult)
+			}
+			s.prepared[call.ID] = result
+			s.close = s.close || closes
+			s.mu.Unlock()
+		})
+	}
+	wait.Wait()
 }
 
 type jTool struct {
@@ -221,9 +268,22 @@ func (t *jTool) Call(ctx context.Context, arguments json.RawMessage) (string, er
 		s.err = errors.New("J tool budget exceeded")
 		return "tool_budget_exhausted", s.err
 	}
-	result := Failure("tool_unavailable")
-	if s.hooks.Execute != nil {
-		result = s.hooks.Execute(ctx, Call{ID: call.ID, Name: call.Name, Arguments: append(json.RawMessage(nil), arguments...), Round: s.round})
+	s.mu.Lock()
+	result, prepared := s.prepared[call.ID]
+	delete(s.prepared, call.ID)
+	s.mu.Unlock()
+	if !prepared {
+		result = Failure("tool_unavailable")
+		runtimeCall := Call{ID: call.ID, Name: call.Name, Arguments: append(json.RawMessage(nil), arguments...), Round: s.round}
+		if s.hooks.Execute != nil {
+			result = s.hooks.Execute(ctx, runtimeCall)
+		}
+		if result.OK && s.hooks.CloseAfter != nil && s.hooks.CloseAfter(runtimeCall, result) {
+			result.Close = true
+			s.mu.Lock()
+			s.close = true
+			s.mu.Unlock()
+		}
 	}
 	b, err := json.Marshal(result)
 	if err != nil || len(b) > jTextLimit {

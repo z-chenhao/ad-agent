@@ -70,6 +70,7 @@ async function run(req: Start) {
   } else manager = SessionManager.inMemory(cwd);
   let round = 0;
   let budget = false;
+  const partialTools = new Map<number, { id: string; name: string }>();
   const tools: ToolDefinition[] = req.tools.map((tool) => ({
     name: tool.name,
     label: tool.name,
@@ -96,6 +97,7 @@ async function run(req: Start) {
           round,
         });
       });
+      if (result.close) session?.setActiveToolsByName([]);
       return {
         content: [{ type: "text" as const, text: fence(result) }],
         details: { ok: result.ok },
@@ -113,7 +115,7 @@ async function run(req: Start) {
     sessionManager: manager,
     settingsManager: SettingsManager.inMemory({
       transport: "sse",
-      compaction: { enabled: false },
+      compaction: { enabled: true },
       retry: {
         enabled: true,
         maxRetries: 1,
@@ -146,6 +148,31 @@ async function run(req: Start) {
       event.assistantMessageEvent.type === "text_delta"
     )
       send({ type: "text_delta", text: event.assistantMessageEvent.delta });
+    if (event.type === "message_update") {
+      const update = event.assistantMessageEvent;
+      if (
+        update.type === "toolcall_start" ||
+        update.type === "toolcall_delta" ||
+        update.type === "toolcall_end"
+      ) {
+        const block = update.partial.content[update.contentIndex];
+        if (block?.type === "toolCall")
+          partialTools.set(update.contentIndex, {
+            id: block.id,
+            name: block.name,
+          });
+        const tool = partialTools.get(update.contentIndex);
+        if (tool)
+          send({
+            type: "tool_delta",
+            id: tool.id,
+            name: tool.name,
+            arguments: update.type === "toolcall_delta" ? update.delta : "",
+          });
+        if (update.type === "toolcall_end")
+          partialTools.delete(update.contentIndex);
+      }
+    }
   });
   await session.prompt(req.prompt);
   const messages = session.messages.slice(startIndex);

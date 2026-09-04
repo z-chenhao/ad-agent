@@ -29,38 +29,39 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.Args[1:], os.Stdin, os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, "错误:", err)
+		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error {
 	if len(args) == 0 {
-		fmt.Fprintln(out, "Ad Agent — 本地广告分析与审批\n命令: chat, inspect, report, changes, approve, discard\n默认数据源: fixture（虚构数据）；不会连接或修改真实 TikTok 广告。\n示例: ad-agent chat --message '过去 7 天哪个 campaign 拉低 ROAS？与前 7 天比较。'\n各命令使用 --help 查看选项。")
+		fmt.Fprintln(out, "Ad Agent — local advertising operations and approvals\nCommands: chat, inspect, report, changes, approve, discard, reconcile, serve, oauth-start, oauth-callback\nDefault source: fictional fixture data; no live TikTok request or write is made.\nExample: ad-agent chat --message 'Which campaign contributed most to the latest ROAS change?'\nUse --help with any command for options.")
 		return nil
 	}
 	command := args[0]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(out)
-	root := fs.String("root", ".", "项目根目录，用于定位已构建的 runtime bridge")
-	runtimeName := fs.String("runtime", "pi", "agent runtime：pi 或 j；同一 session 不要切换 runtime")
-	data := fs.String("data-dir", ".data", "本机私有状态目录（0700）")
-	session := fs.String("session", "local", "会话 ID")
-	message := fs.String("message", "", "单轮消息；省略时进入交互模式")
-	asJSON := fs.Bool("json", false, "输出结构化 JSON")
-	events := fs.Bool("events", false, "输出公开事件 NDJSON")
-	level := fs.String("level", "campaign", "campaign / ad_group / ad / advertiser（仅报表）")
-	parent := fs.String("parent", "", "父对象 ID")
-	start := fs.String("start", "2022-07-11", "起始日期，包含当天")
-	end := fs.String("end", "2022-07-17", "结束日期，包含当天")
-	id := fs.String("id", "", "准确的对象或草案 ID")
-	addr := fs.String("addr", "127.0.0.1:8080", "Web 仅允许 loopback 地址；3000 保留给隔离回调")
-	backendName := fs.String("backend", "fixture", "fixture 或 tiktok；tiktok 仅只读")
-	tiktokAdvertiser := fs.String("tiktok-advertiser", "", "绑定的 TikTok advertiser ID")
-	tiktokEnvironment := fs.String("tiktok-environment", "sandbox", "TikTok sandbox 或 live")
+	root := fs.String("root", ".", "project root containing the built runtime bridges")
+	runtimeName := fs.String("runtime", "pi", "agent runtime: pi or j; do not switch within a session")
+	data := fs.String("data-dir", ".data", "private local state directory with mode 0700")
+	session := fs.String("session", "local", "session ID")
+	message := fs.String("message", "", "single-turn message; omit for interactive mode")
+	asJSON := fs.Bool("json", false, "print structured JSON")
+	events := fs.Bool("events", false, "print public lifecycle events as NDJSON")
+	autoMemory := fs.Bool("auto-memory", true, "extract filtered durable operator facts after completed turns")
+	level := fs.String("level", "campaign", "campaign / ad_group / ad / advertiser (reports only)")
+	parent := fs.String("parent", "", "parent entity ID")
+	start := fs.String("start", "2022-07-11", "inclusive start date")
+	end := fs.String("end", "2022-07-17", "inclusive end date")
+	id := fs.String("id", "", "exact entity or change ID")
+	addr := fs.String("addr", "127.0.0.1:8080", "loopback Web address; port 3000 is reserved for OAuth callback")
+	backendName := fs.String("backend", "fixture", "fixture or tiktok; tiktok is read-only")
+	tiktokAdvertiser := fs.String("tiktok-advertiser", "", "bound TikTok advertiser ID")
+	tiktokEnvironment := fs.String("tiktok-environment", "sandbox", "TikTok environment: sandbox or live")
 	tiktokBaseURL := fs.String("tiktok-base-url", tiktokmapi.DefaultBaseURL, "TikTok MAPI HTTPS base URL")
-	tiktokRevenueMetric := fs.String("tiktok-revenue-metric", "", "已核对的 revenue metric；默认留空并禁用真实 ROAS")
-	redirectURL := fs.String("redirect-url", "", "已登记的准确 HTTPS 或 localhost HTTP 根路径回调 URL")
-	authorizationURL := fs.String("authorization-url", "", "从 TikTok My Apps 复制的 Advertiser authorization URL")
+	tiktokRevenueMetric := fs.String("tiktok-revenue-metric", "", "validated revenue metric; empty disables live ROAS")
+	redirectURL := fs.String("redirect-url", "", "exact registered HTTPS or localhost root callback URL")
+	authorizationURL := fs.String("authorization-url", "", "advertiser authorization URL copied from TikTok My Apps")
 	if e := fs.Parse(args[1:]); e != nil {
 		if errors.Is(e, flag.ErrHelp) {
 			return nil
@@ -105,7 +106,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 		server := &http.Server{Addr: *addr, Handler: callback.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 15 * time.Second, MaxHeaderBytes: 8192}
-		fmt.Fprintln(out, "TikTok callback-only listener: http://127.0.0.1:3000/\n这里只接收一次性 OAuth 回调；不会提供管理页面。")
+		fmt.Fprintln(out, "TikTok callback-only listener: http://127.0.0.1:3000/\nThis endpoint accepts one-time OAuth callbacks only; it serves no management UI.")
 		go func() {
 			<-ctx.Done()
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -178,6 +179,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return e
 	}
 	defer a.Store.Close()
+	a.Host.AutomaticMemoryCapture = *autoMemory
 	encode := func(v any) error { enc := json.NewEncoder(out); enc.SetIndent("", "  "); return enc.Encode(v) }
 	switch command {
 	case "serve":
@@ -191,7 +193,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 		server := &http.Server{Addr: *addr, Handler: handler.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
-		fmt.Fprintf(out, "Ad Agent: %s\n登录密钥保存在本机文件 %s（不要发到聊天或提交 Git）\n数据源：%s；runtime：%s；主应用未连接 3000 隧道。\n", origin, filepath.Join(a.Store.Dir, "operator-key"), *backendName, *runtimeName)
+		fmt.Fprintf(out, "Ad Agent: %s\nThe login key is stored at %s (never send it to chat or commit it).\nSource: %s; runtime: %s; the main app is not connected to the port 3000 tunnel.\n", origin, filepath.Join(a.Store.Dir, "operator-key"), *backendName, *runtimeName)
 		go func() {
 			<-ctx.Done()
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -275,7 +277,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			fmt.Fprintln(out)
 			for _, c := range result.Cards {
 				if c.Type == "change" && c.Change != nil {
-					fmt.Fprintf(out, "草案 %s：%s（尚未执行）\n", c.Change.ID, c.Change.State)
+					fmt.Fprintf(out, "Draft %s: %s (not applied)\n", c.Change.ID, c.Change.State)
 				}
 				if c.Type == "suggestions" {
 					for _, s := range c.Suggestions {
@@ -291,13 +293,13 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return chat(*message)
 	}
 	if !*asJSON && !*events {
-		fmt.Fprintf(out, "Ad Agent / %s / %s + Luna\n输入 /exit 退出；审批需独立 approve --id 命令。\n", *backendName, *runtimeName)
+		fmt.Fprintf(out, "Ad Agent / %s / %s + Luna\nEnter /exit to quit. Approval requires a separate approve --id command.\n", *backendName, *runtimeName)
 	}
 	scan := bufio.NewScanner(in)
 	scan.Buffer(make([]byte, 4096), 16001)
 	for {
 		if !*asJSON && !*events {
-			fmt.Fprint(out, "你 > ")
+			fmt.Fprint(out, "you > ")
 		}
 		if !scan.Scan() {
 			break
@@ -310,7 +312,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			continue
 		}
 		if e := chat(text); e != nil {
-			fmt.Fprintln(out, "本轮失败:", e)
+			fmt.Fprintln(out, "turn failed:", e)
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()

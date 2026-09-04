@@ -19,12 +19,12 @@ import (
 type testRuntime struct{}
 
 func (testRuntime) Run(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
-	h.Emit(ar.Event{Type: "text.delta", Text: "fixture 账户读取"})
+	h.Emit(ar.Event{Type: "text.delta", Text: "fixture account read"})
 	result := h.Execute(ctx, ar.Call{ID: "get", Name: "get_advertiser_context", Arguments: json.RawMessage(`{}`), Round: 1})
 	if !result.OK {
 		return ar.Result{}, context.Canceled
 	}
-	return ar.Result{Text: "fixture 账户读取", Stop: "stop"}, nil
+	return ar.Result{Text: "fixture account read", Stop: "stop"}, nil
 }
 func setup(t *testing.T) (*Server, *httptest.Server, *http.Client, string) {
 	t.Helper()
@@ -36,6 +36,7 @@ func setup(t *testing.T) (*Server, *httptest.Server, *http.Client, string) {
 	}
 	t.Cleanup(func() { a.Store.Close() })
 	a.Host.Runtime = testRuntime{}
+	a.Host.AutomaticMemoryCapture = false
 	ts := httptest.NewUnstartedServer(nil)
 	origin := "http://" + ts.Listener.Addr().String()
 	s, e := New(a, origin, t.TempDir())
