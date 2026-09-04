@@ -13,11 +13,12 @@ import (
 )
 
 type App struct {
-	Store   *store.Store
-	Backend ads.Backend
-	Host    *agenthost.Host
-	Changes agenthost.Changes
-	Runtime string
+	Store    *store.Store
+	Backend  ads.Reader
+	Host     *agenthost.Host
+	Changes  agenthost.Changes
+	Runtime  string
+	Writable bool
 }
 
 func Open(root, stateDir string) (*App, error) {
@@ -39,12 +40,12 @@ func OpenRuntime(stateDir string, runtime ar.Runtime) (*App, error) {
 
 // OpenBackend composes one already-bound real backend. Real writes stay disabled
 // and no Writer is accepted until endpoint semantics have been live-verified.
-func OpenBackend(root, stateDir string, backend ads.Backend) (*App, error) {
+func OpenBackend(root, stateDir string, backend ads.Reader) (*App, error) {
 	return OpenBackendRuntime(stateDir, backend, ar.Pi{Entry: filepath.Join(root, "runtime", "pi-bridge", "dist", "main.js")})
 }
 
 // OpenBackendRuntime composes a real read-only backend with an explicitly selected runtime.
-func OpenBackendRuntime(stateDir string, backend ads.Backend, runtime ar.Runtime) (*App, error) {
+func OpenBackendRuntime(stateDir string, backend ads.Reader, runtime ar.Runtime) (*App, error) {
 	if backend == nil {
 		return nil, errors.New("backend is required")
 	}
@@ -58,7 +59,23 @@ func OpenBackendRuntime(stateDir string, backend ads.Backend, runtime ar.Runtime
 	return compose(s, backend, nil, ads.ReadOnlyPolicy(), runtime)
 }
 
-func compose(s *store.Store, backend ads.Backend, writer ads.Writer, policy ads.Policy, runtime ar.Runtime) (*App, error) {
+// OpenAdBackendRuntime composes one complete backend. The reader is given to the
+// host while the writer is given only to the approval service.
+func OpenAdBackendRuntime(stateDir string, backend ads.Backend, policy ads.Policy, runtime ar.Runtime) (*App, error) {
+	if backend == nil {
+		return nil, errors.New("backend is required")
+	}
+	if runtime == nil {
+		return nil, errors.New("runtime is required")
+	}
+	s, err := store.Open(stateDir)
+	if err != nil {
+		return nil, err
+	}
+	return compose(s, backend, backend, policy, runtime)
+}
+
+func compose(s *store.Store, backend ads.Reader, writer ads.Writer, policy ads.Policy, runtime ar.Runtime) (*App, error) {
 	changes := agenthost.Changes{Backend: backend, Writer: writer, Store: s, Policy: policy}
 	h, err := agenthost.New(backend, runtime, s, changes)
 	if err != nil {
@@ -72,7 +89,7 @@ func compose(s *store.Store, backend ads.Backend, writer ads.Writer, policy ads.
 	case ar.J, *ar.J:
 		name = "j"
 	}
-	return &App{Store: s, Backend: backend, Host: h, Changes: changes, Runtime: name}, nil
+	return &App{Store: s, Backend: backend, Host: h, Changes: changes, Runtime: name, Writable: writer != nil}, nil
 }
 
 // Fixture state lives in the database so independent CLI invocations see the same lab world.

@@ -18,12 +18,13 @@ func TestJToolLoopCheckpointAndRestore(t *testing.T) {
 	}
 	root := t.TempDir()
 	runtime := J{Entry: entry}
+	selection := ModelSelection{Provider: CodexProvider, Model: "gpt-5.4-mini", Reasoning: "medium"}
 	tool := Tool{Name: "read_data", Description: "read", Parameters: json.RawMessage(`{"type":"object"}`)}
 	executed := 0
 	var deltas strings.Builder
 	first, err := runtime.Run(context.Background(), Request{
 		System: "system", Prompt: "first", Tools: []Tool{tool}, MaxRounds: 3,
-		SessionDir: filepath.Join(root, "turn-1"),
+		SessionDir: filepath.Join(root, "turn-1"), Model: selection,
 	}, Hooks{
 		Execute: func(_ context.Context, call Call) ToolResult {
 			executed++
@@ -46,13 +47,20 @@ func TestJToolLoopCheckpointAndRestore(t *testing.T) {
 	}
 	second, err := runtime.Run(context.Background(), Request{
 		System: "system", Prompt: "second", Tools: []Tool{tool}, MaxRounds: 3,
-		Checkpoint: first.Checkpoint, SessionDir: filepath.Join(root, "turn-2"),
+		Checkpoint: first.Checkpoint, SessionDir: filepath.Join(root, "turn-2"), Model: selection,
 	}, Hooks{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if second.Text != "done" || second.Checkpoint == first.Checkpoint {
 		t.Fatalf("second=%#v", second)
+	}
+	_, err = runtime.Run(context.Background(), Request{
+		System: "system", Prompt: "mismatch", MaxRounds: 1,
+		Checkpoint: second.Checkpoint, SessionDir: filepath.Join(root, "turn-3"), Model: DefaultModelSelection(),
+	}, Hooks{})
+	if err == nil || !strings.Contains(err.Error(), "model mismatch") {
+		t.Fatalf("checkpoint mismatch err=%v", err)
 	}
 }
 

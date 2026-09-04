@@ -1,4 +1,4 @@
-import type { Event } from "./types";
+import type { Event, ModelSelection } from "./types";
 let csrf = "";
 export function setCSRF(value: string) {
   csrf = value;
@@ -26,6 +26,7 @@ export async function api<T>(
 export async function streamTurn(
   sessionId: string,
   message: string,
+  model: ModelSelection,
   signal: AbortSignal,
   emit: (event: Event) => void,
 ) {
@@ -33,7 +34,7 @@ export async function streamTurn(
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json", "X-CSRF-Token": csrf },
-    body: JSON.stringify({ session_id: sessionId, message }),
+    body: JSON.stringify({ session_id: sessionId, message, model }),
     signal,
   });
   if (!response.ok || !response.body)

@@ -8,7 +8,8 @@ currently required from the user. The TikTok developer app is pending approval.
 - Single-user local application with a Go host and React UI.
 - Independent AdBackend and runtime replacement axes.
 - Pi 0.84.4 full-agent sidecar and J-agent at commit `6ddcaee` with a model-only bridge.
-- Existing ChatGPT OAuth and explicit `openai-codex/gpt-5.6-luna` for both runtimes.
+- Existing ChatGPT OAuth, Luna default, and explicit session-pinned selection across the
+  seven Codex models enumerated by the installed Pi SDK.
 - Read analysis, model-authored drafts, and operator approval are separate.
 - Fixture data is explicitly fictional and never used as a live fallback.
 - Active versus staged workflow skills are generated from one validated manifest.
@@ -24,7 +25,7 @@ currently required from the user. The TikTok developer app is pending approval.
 | J CLI           | live Luna read, restore, analysis, and draft passed | J owns the loop; bridge only supplies the model                           |
 | Pi Web          | six Playwright tests passed, including live Luna    | SSE, draft, approval, read-back, reload, desktop, and mobile              |
 | J Web           | the same six Playwright tests passed with live Luna | The complete Web workflow is runtime-neutral rather than Pi-only          |
-| TikTok adapter  | HTTP-fake tests passed                              | account, hierarchy, report, pagination, errors, limits                    |
+| TikTok adapter  | read/write HTTP-fake tests passed                   | reads plus budget/status wire shapes and write outcome classification     |
 | OAuth callback  | local security and smoke tests passed               | state, replay defense, exchange, local credential file                    |
 | TikTok platform | not run                                             | app approval, scopes, advertiser binding, and real data remain unverified |
 
@@ -67,6 +68,21 @@ Local v0.8 acceptance evidence:
   `daily-account-briefing`, executed account, campaign, report, and pending-change reads,
   presented trusted metrics and suggestions, and created no draft.
 
+## v0.9 backend and model selection evidence
+
+- AdBackend now composes Reader and Writer; the host receives Reader and the independent
+  approval service receives Writer.
+- The TikTok MAPI Writer has HTTP-fake coverage for campaign/ad-group budget updates and
+  campaign/ad-group/ad status updates, including acknowledged, rejected, unknown, and
+  not-sent outcomes. No live TikTok write was attempted.
+- Runtime model selection is validated against seven installed `openai-codex` models,
+  stored on the public session, propagated to main, analysis, and memory calls, and
+  rejected if a later turn tries to mix a different model checkpoint into that session.
+- Pi and J each completed a real `gpt-5.4-mini` fixture read through ChatGPT OAuth. The
+  first J attempt ended as `provider_failed` before any tool call; an unchanged retry
+  completed. This is evidence of fail-closed handling and eventual availability, not a
+  guarantee of provider uptime.
+
 ## Callback and tunnel
 
 The registered HTTPS ngrok root callback remains a valid fallback. Port 3000 runs only
@@ -88,8 +104,9 @@ is entered only on TikTok's page.
    wire tests, and platform evidence exist.
 3. Add golden conversations when each staged workflow becomes executable; staged
    documentation is not a runnable capability.
-4. Treat live writes as a separate project gate with a controlled object, explicit cap,
-   per-change approval, and unknown-outcome reconciliation.
+4. Run the implemented TikTok Writer against one controlled object with explicit caps,
+   per-change approval, read-back, and unknown-outcome reconciliation before treating
+   it as live-platform validated.
 
 ## Reproduction
 

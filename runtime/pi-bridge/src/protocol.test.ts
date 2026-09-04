@@ -6,6 +6,11 @@ test("strict start and duplicate tool rejection", () => {
     type: "start",
     system: "s",
     prompt: "p",
+    model: {
+      provider: "openai-codex",
+      model: "gpt-5.6-luna",
+      reasoning: "medium",
+    },
     max_rounds: 6,
     tools: [
       {
@@ -17,6 +22,14 @@ test("strict start and duplicate tool rejection", () => {
   };
   assert.equal(parseInput(JSON.stringify(start)).type, "start");
   assert.throws(() => parseInput(JSON.stringify({ ...start, max_rounds: 0 })));
+  assert.throws(() =>
+    parseInput(
+      JSON.stringify({
+        ...start,
+        model: { ...start.model, model: "unknown" },
+      }),
+    ),
+  );
   assert.throws(() =>
     parseInput(
       JSON.stringify({ ...start, tools: [...start.tools, ...start.tools] }),

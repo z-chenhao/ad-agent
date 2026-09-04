@@ -23,6 +23,11 @@ export interface JTool {
   description: string;
   inputSchema: Record<string, unknown>;
 }
+export interface ModelSelection {
+  provider: "openai-codex";
+  model: string;
+  reasoning: "medium";
+}
 export interface JRequest {
   messages: JMessage[];
   tools?: JTool[];
@@ -32,7 +37,7 @@ export interface ProviderState {
   assistants: AssistantMessage[];
 }
 export type InputFrame =
-  | { type: "start"; provider_state?: unknown }
+  | { type: "start"; provider_state?: unknown; model: ModelSelection }
   | { type: "complete"; id: string; request: JRequest };
 
 export function parseInput(line: string): InputFrame {
@@ -40,7 +45,10 @@ export function parseInput(line: string): InputFrame {
   const value: unknown = JSON.parse(line);
   if (!value || typeof value !== "object") throw new Error("invalid_frame");
   const frame = value as Record<string, unknown>;
-  if (frame.type === "start") return frame as InputFrame;
+  if (frame.type === "start") {
+    validateModel(frame.model);
+    return frame as unknown as InputFrame;
+  }
   if (
     frame.type !== "complete" ||
     typeof frame.id !== "string" ||
@@ -53,7 +61,10 @@ export function parseInput(line: string): InputFrame {
   return frame as unknown as InputFrame;
 }
 
-export function parseState(value: unknown): ProviderState {
+export function parseState(
+  value: unknown,
+  selection: ModelSelection,
+): ProviderState {
   if (value === undefined || value === null)
     return { version: 1, assistants: [] };
   if (!value || typeof value !== "object") throw new Error("invalid_state");
@@ -63,11 +74,16 @@ export function parseState(value: unknown): ProviderState {
   const encoded = JSON.stringify(state);
   if (Buffer.byteLength(encoded) > 8 * 1024 * 1024)
     throw new Error("state_limit");
-  for (const message of state.assistants) validateNativeAssistant(message);
+  for (const message of state.assistants)
+    validateNativeAssistant(message, selection);
   return state as unknown as ProviderState;
 }
 
-export function buildContext(request: JRequest, state: ProviderState): Context {
+export function buildContext(
+  request: JRequest,
+  state: ProviderState,
+  selection: ModelSelection,
+): Context {
   if (!Array.isArray(request.messages) || !Array.isArray(request.tools ?? []))
     throw new Error("invalid_request");
   let systemPrompt: string | undefined;
@@ -102,7 +118,7 @@ export function buildContext(request: JRequest, state: ProviderState): Context {
     const native = state.assistants[assistantIndex++];
     if (
       !native ||
-      canonical(normalizeNative(native)) !==
+      canonical(normalizeNative(native, selection)) !==
         canonical(normalizeJ(message.content))
     )
       throw new Error("assistant_state_mismatch");
@@ -129,23 +145,27 @@ export function buildContext(request: JRequest, state: ProviderState): Context {
   return { systemPrompt, messages, tools };
 }
 
-export function toJMessage(message: AssistantMessage): JMessage {
-  validateNativeAssistant(message);
+export function toJMessage(
+  message: AssistantMessage,
+  selection: ModelSelection,
+): JMessage {
+  validateNativeAssistant(message, selection);
   return {
     role: "assistant",
-    content: normalizeNative(message),
+    content: normalizeNative(message, selection),
   };
 }
 
 function validateNativeAssistant(
   value: unknown,
+  selection: ModelSelection,
 ): asserts value is AssistantMessage {
   if (!value || typeof value !== "object") throw new Error("invalid_assistant");
   const message = value as Record<string, unknown>;
   if (
     message.role !== "assistant" ||
-    message.provider !== "openai-codex" ||
-    message.model !== "gpt-5.6-luna" ||
+    message.provider !== selection.provider ||
+    message.model !== selection.model ||
     !Array.isArray(message.content) ||
     !message.usage ||
     typeof message.stopReason !== "string"
@@ -213,7 +233,11 @@ function normalizeJ(content: JContent[]): JContent[] {
   );
 }
 
-function normalizeNative(message: AssistantMessage): JContent[] {
+function normalizeNative(
+  message: AssistantMessage,
+  selection: ModelSelection,
+): JContent[] {
+  validateNativeAssistant(message, selection);
   return message.content.map((content) => {
     if (content.type === "text") return { type: "text", text: content.text };
     if (content.type === "thinking")
@@ -227,6 +251,27 @@ function normalizeNative(message: AssistantMessage): JContent[] {
       },
     };
   });
+}
+
+const supportedModels = new Set([
+  "gpt-5.3-codex-spark",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.5",
+  "gpt-5.6-luna",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+]);
+
+function validateModel(value: unknown): asserts value is ModelSelection {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    (value as Record<string, unknown>).provider !== "openai-codex" ||
+    !supportedModels.has(String((value as Record<string, unknown>).model)) ||
+    (value as Record<string, unknown>).reasoning !== "medium"
+  )
+    throw new Error("invalid_model");
 }
 
 function canonical(value: unknown): string {

@@ -1,4 +1,4 @@
-# Ad Agent operating contract
+# Ad Agent runtime system contract
 
 This file is the static system contract for Ad Agent. It is loaded when an agent
 runtime session starts. Advertiser identity, account data, saved facts, local time,

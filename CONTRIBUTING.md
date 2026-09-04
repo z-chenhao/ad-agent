@@ -1,7 +1,7 @@
 # Contributing
 
 Repository interfaces are private and experimental unless a document says otherwise.
-Read `AGENTS.md`, `AGENT.md`, and the design documents before changing runtime,
+Read `AGENTS.md`, `prompts/ad-agent-system.md`, and the design documents before changing runtime,
 AdBackend, tool, skill, or approval behavior. Do not generalize an interface without a
 real consumer and evidence.
 

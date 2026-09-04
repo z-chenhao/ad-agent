@@ -7,6 +7,11 @@ export interface Start {
   type: "start";
   system: string;
   prompt: string;
+  model: {
+    provider: "openai-codex";
+    model: string;
+    reasoning: "medium";
+  };
   tools: ToolSpec[];
   max_rounds: number;
   checkpoint?: string;
@@ -34,6 +39,11 @@ export function parseInput(line: string): Start | Reply {
     o.type !== "start" ||
     typeof o.system !== "string" ||
     typeof o.prompt !== "string" ||
+    !o.model ||
+    typeof o.model !== "object" ||
+    (o.model as Record<string, unknown>).provider !== "openai-codex" ||
+    !supportedModels.has(String((o.model as Record<string, unknown>).model)) ||
+    (o.model as Record<string, unknown>).reasoning !== "medium" ||
     !Array.isArray(o.tools) ||
     !Number.isInteger(o.max_rounds) ||
     Number(o.max_rounds) < 1 ||
@@ -58,6 +68,16 @@ export function parseInput(line: string): Start | Reply {
       throw new Error("invalid_path");
   return o as unknown as Start;
 }
+
+const supportedModels = new Set([
+  "gpt-5.3-codex-spark",
+  "gpt-5.4",
+  "gpt-5.4-mini",
+  "gpt-5.5",
+  "gpt-5.6-luna",
+  "gpt-5.6-sol",
+  "gpt-5.6-terra",
+]);
 // JSON escaping prevents data from closing the boundary. This is defense in depth, not authorization.
 export function fence(value: unknown): string {
   return (

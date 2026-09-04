@@ -5,6 +5,11 @@ export interface Source {
 }
 export interface RuntimeConfig {
   runtime: "pi" | "j" | "custom";
+  writes: boolean;
+  model: {
+    default: ModelSelection;
+    options: ModelOption[];
+  };
   harness: {
     capabilities: { name: string; description: string; tools: string[] }[];
     grounding: boolean;
@@ -14,6 +19,16 @@ export interface RuntimeConfig {
     partial_presentation: boolean;
     automatic_memory_capture: boolean;
   };
+}
+export interface ModelSelection {
+  provider: string;
+  model: string;
+  reasoning: "medium";
+}
+export interface ModelOption {
+  provider: string;
+  model: string;
+  label: string;
 }
 export interface Account {
   id: string;
@@ -152,6 +167,7 @@ export interface Message {
 export interface Session {
   id: string;
   messages: Message[];
+  model: ModelSelection;
 }
 export interface TurnResult {
   turn_id: string;

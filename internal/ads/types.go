@@ -140,7 +140,7 @@ type Report struct {
 	Totals      Metrics     `json:"totals"`
 	RequestIDs  []string    `json:"request_ids,omitempty"`
 }
-type Backend interface {
+type Reader interface {
 	Account(context.Context) (Account, error)
 	List(context.Context, EntityQuery) ([]Entity, error)
 	Get(context.Context, Level, string) (Entity, error)
@@ -161,6 +161,13 @@ type WriteOutcome struct {
 // Writer is only supplied to the host change service, never to an agent runtime.
 type Writer interface {
 	Write(context.Context, WriteRequest) WriteOutcome
+}
+
+// Backend is the complete advertising-system adapter. Capability slicing keeps
+// Reader in the agent host and Writer in the approval service.
+type Backend interface {
+	Reader
+	Writer
 }
 
 var ErrNotFound = errors.New("entity not found in the bound account")

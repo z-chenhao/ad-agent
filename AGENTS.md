@@ -1,8 +1,9 @@
 # Ad Agent engineering instructions
 
-This file is for coding agents working in this repository. `AGENT.md` is the static
-operating contract for the advertising agent. Communicate with the repository owner
-in their chosen language, but keep all repository artifacts and product UI in English.
+This file is for coding agents working in this repository.
+`prompts/ad-agent-system.md` is the product runtime system contract. Communicate with
+the repository owner in their chosen language, but keep all repository artifacts and
+product UI in English.
 
 Read these documents before making changes:
 
@@ -22,8 +23,9 @@ Read these documents before making changes:
   approval.
 - The host binds identity and environment. Fixture never masks a live error or claims
   to be live data.
-- Both runtimes explicitly select `openai-codex/gpt-5.6-luna`. Never silently change
-  the model or the user's global defaults.
+- Both runtimes use an explicit, session-pinned provider/model selection. The default is
+  `openai-codex/gpt-5.6-luna`; only models in the validated host allowlist are selectable.
+  Never silently change the session model or the user's global defaults.
 - Explicitly initialize Pi networking. Disable default coding tools and automatic Pi
   contexts, extensions, skills, and prompts. J exposes only advertising tools supplied
   by the Go host.
@@ -44,8 +46,10 @@ Read these documents before making changes:
   under `skills/_staged`; do not expose them through `load_skill`.
 - J-agent must own a real model/tool loop; a wrapper around the full Pi loop is not a J
   integration.
+- TikTok MAPI and fixture each implement the complete AdBackend. The agent host receives
+  only its Reader slice; the approval service alone receives its Writer slice.
 - Do not create or enable live ads, change live budgets, or alter permissions without
-  explicit scope and product approval.
+  explicit write enablement, bounded policy, one-change product approval, and read-back.
 - Cover success, rejection, missing or partial data, cancellation, and timeout. Never
   blindly retry an unknown write outcome.
 - Local Pi/J CLI and Web loops plus MAPI wire tests are implemented. Consult the

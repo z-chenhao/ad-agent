@@ -207,7 +207,7 @@ func (t *turn) analyze(ctx context.Context, question string, refs []string) ar.T
 		return ar.Failure("unknown_analysis_tool")
 	}
 	prompt := "Question: " + question + "\nDelegated dataset handles: " + strings.Join(refs, ", ")
-	r, e := t.host.Runtime.Run(childCtx, ar.Request{System: analysisContract, Prompt: prompt, Tools: reg.tools, MaxRounds: 8}, ar.Hooks{Execute: func(ctx context.Context, c ar.Call) ar.ToolResult {
+	r, e := t.host.Runtime.Run(childCtx, ar.Request{System: analysisContract, Prompt: prompt, Tools: reg.tools, MaxRounds: 8, Model: t.model}, ar.Hooks{Execute: func(ctx context.Context, c ar.Call) ar.ToolResult {
 		t.event("tool.started", struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`

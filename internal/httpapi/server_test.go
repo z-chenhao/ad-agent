@@ -104,7 +104,7 @@ func TestAuthOriginCSRFAndPublicSurface(t *testing.T) {
 	}
 	json.Unmarshal(b, &auth)
 	code, b = request(t, c, "GET", ts.URL+"/api/v1/config", "", "", nil)
-	if code != 200 || !strings.Contains(string(b), `"runtime":"pi"`) {
+	if code != 200 || !strings.Contains(string(b), `"runtime":"pi"`) || !strings.Contains(string(b), `"gpt-5.6-luna"`) || !strings.Contains(string(b), `"writes":true`) {
 		t.Fatal("runtime config missing", code, string(b))
 	}
 	code, b = request(t, c, "GET", ts.URL+"/api/v1/advertisers/current", "", "", nil)
@@ -119,15 +119,21 @@ func TestAuthOriginCSRFAndPublicSurface(t *testing.T) {
 	if code != 400 {
 		t.Fatal("identity override", code)
 	}
+	code, _ = request(t, c, "POST", ts.URL+"/api/v1/agent/turn", ts.URL, auth.CSRF, map[string]any{
+		"session_id": "web", "message": "hi", "model": map[string]string{"provider": "deepseek", "model": "chat", "reasoning": "medium"},
+	})
+	if code != 400 {
+		t.Fatal("unsupported model accepted", code)
+	}
 	code, b = request(t, c, "POST", ts.URL+"/api/v1/agent/turn", ts.URL, auth.CSRF, map[string]string{"session_id": "web", "message": "read fixture account"})
 	if code != 200 || !strings.Contains(string(b), "turn.completed") || !strings.Contains(string(b), "text.delta") {
 		t.Fatal("SSE missing lifecycle", code, string(b))
 	}
 	code, b = request(t, c, "GET", ts.URL+"/api/v1/session?session_id=web", "", "", nil)
-	if code != 200 || strings.Contains(string(b), "checkpoint") || strings.Contains(string(b), key) {
+	if code != 200 || strings.Contains(string(b), "checkpoint") || strings.Contains(string(b), key) || !strings.Contains(string(b), `"model":"gpt-5.6-luna"`) {
 		t.Fatal("private checkpoint exposed")
 	}
-	code, _ = request(t, c, "GET", ts.URL+"/AGENT.md", "", "", nil)
+	code, _ = request(t, c, "GET", ts.URL+"/prompts/ad-agent-system.md", "", "", nil)
 	if code != 404 {
 		t.Fatal("source file served")
 	}
@@ -188,9 +194,9 @@ func TestOperatorKeyRejectsSymlinkAndLooseMode(t *testing.T) {
 func TestStaticPathCannotEscapeWebRoot(t *testing.T) {
 	_, ts, client, _ := setup(t)
 	for _, candidate := range []string{
-		"/AGENT.md",
-		"/assets/../../AGENT.md",
-		"/assets/%2e%2e/%2e%2e/AGENT.md",
+		"/prompts/ad-agent-system.md",
+		"/assets/../../prompts/ad-agent-system.md",
+		"/assets/%2e%2e/%2e%2e/prompts/ad-agent-system.md",
 		"/not-an-asset.txt",
 	} {
 		resp, err := client.Get(ts.URL + candidate)

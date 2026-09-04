@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/z-chenhao/ad-agent/internal/ads"
+	ar "github.com/z-chenhao/ad-agent/internal/runtime"
 	_ "modernc.org/sqlite"
 	"os"
 	"path/filepath"
@@ -34,11 +35,12 @@ type Seen struct {
 	At     time.Time  `json:"at"`
 }
 type Session struct {
-	ID         string          `json:"id"`
-	Source     ads.Source      `json:"source"`
-	Messages   []Message       `json:"messages"`
-	Provenance map[string]Seen `json:"provenance"`
-	Checkpoint string          `json:"-"`
+	ID         string            `json:"id"`
+	Source     ads.Source        `json:"source"`
+	Messages   []Message         `json:"messages"`
+	Provenance map[string]Seen   `json:"provenance"`
+	Model      ar.ModelSelection `json:"model"`
+	Checkpoint string            `json:"-"`
 }
 type storedSession struct {
 	Session

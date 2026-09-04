@@ -28,6 +28,11 @@ type frame struct {
 }
 
 func (p Pi) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
+	model, err := NormalizeModel(r.Model)
+	if err != nil {
+		return Result{}, err
+	}
+	r.Model = model
 	if r.MaxRounds < 1 || r.MaxRounds > 16 {
 		return Result{}, errors.New("invalid round budget")
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 type Changes struct {
-	Backend ads.Backend
+	Backend ads.Reader
 	Writer  ads.Writer
 	Store   *store.Store
 	Policy  ads.Policy

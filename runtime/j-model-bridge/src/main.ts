@@ -11,6 +11,7 @@ import {
   parseState,
   toJMessage,
   type JRequest,
+  type ModelSelection,
   type ProviderState,
 } from "./protocol.js";
 
@@ -28,6 +29,7 @@ const send = (value: unknown) =>
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 let modelRuntime: Awaited<ReturnType<typeof ModelRuntime.create>> | undefined;
 let model: ReturnType<ModelRuntime["getModel"]>;
+let selection: ModelSelection | undefined;
 let state: ProviderState = { version: 1, assistants: [] };
 let started = false;
 let closed = false;
@@ -46,6 +48,7 @@ const safeCodes = new Set([
   "provider_failed",
   "provider_incomplete",
   "oauth_or_model_missing",
+  "invalid_model",
 ]);
 
 function safeError(error: unknown): string {
@@ -53,27 +56,29 @@ function safeError(error: unknown): string {
   return safeCodes.has(message) ? message : "runtime_failed";
 }
 
-async function start(providerState: unknown) {
+async function start(providerState: unknown, requested: ModelSelection) {
   if (started) throw new Error("duplicate_start");
   started = true;
-  state = parseState(providerState);
+  selection = requested;
+  state = parseState(providerState, selection);
   modelRuntime = await ModelRuntime.create({
     modelsPath: null,
     allowModelNetwork: false,
     signal: AbortSignal.timeout(10_000),
   });
-  model = modelRuntime.getModel("openai-codex", "gpt-5.6-luna");
-  if (!model || !modelRuntime.isUsingOAuth("openai-codex"))
+  model = modelRuntime.getModel(selection.provider, selection.model);
+  if (!model || !modelRuntime.isUsingOAuth(selection.provider))
     throw new Error("oauth_or_model_missing");
   send({ type: "ready" });
 }
 
 async function complete(id: string, request: JRequest) {
-  if (!started || !modelRuntime || !model) throw new Error("not_started");
-  const context = buildContext(request, state);
+  if (!started || !modelRuntime || !model || !selection)
+    throw new Error("not_started");
+  const context = buildContext(request, state, selection);
   let final: AssistantMessage | undefined;
   const stream = modelRuntime.streamSimple(model, context, {
-    reasoning: "medium",
+    reasoning: selection.reasoning,
     transport: "sse",
     maxRetries: 1,
     maxRetryDelayMs: 2_000,
@@ -103,7 +108,7 @@ async function complete(id: string, request: JRequest) {
     type: "done",
     id,
     response: {
-      message: toJMessage(final),
+      message: toJMessage(final, selection),
       provider: final.provider,
       model: final.model,
       responseId: final.responseId,
@@ -138,7 +143,8 @@ input.on("line", (line) => {
   chain = chain
     .then(async () => {
       const frame = parseInput(line);
-      if (frame.type === "start") await start(frame.provider_state);
+      if (frame.type === "start")
+        await start(frame.provider_state, frame.model);
       else {
         try {
           await complete(frame.id, frame.request);

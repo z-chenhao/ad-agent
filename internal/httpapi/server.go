@@ -13,6 +13,7 @@ import (
 	"github.com/z-chenhao/ad-agent/internal/ads"
 	"github.com/z-chenhao/ad-agent/internal/agenthost"
 	"github.com/z-chenhao/ad-agent/internal/app"
+	ar "github.com/z-chenhao/ad-agent/internal/runtime"
 	"github.com/z-chenhao/ad-agent/internal/store"
 	"io"
 	"net"
@@ -136,8 +137,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/v1/config", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		writeJSON(w, 200, struct {
 			Runtime string                  `json:"runtime"`
+			Model   agenthost.ModelConfig   `json:"model"`
+			Writes  bool                    `json:"writes"`
 			Harness agenthost.PublicHarness `json:"harness"`
-		}{s.App.Runtime, s.App.Host.PublicHarness()})
+		}{s.App.Runtime, s.App.Host.ModelConfig(), s.App.Writable, s.App.Host.PublicHarness()})
 	}))
 	mux.HandleFunc("POST /api/v1/logout", s.authorize(func(w http.ResponseWriter, r *http.Request, _ loginSession) {
 		c, _ := r.Cookie("ad_session")
@@ -319,14 +322,19 @@ func validSession(s string) bool {
 }
 func (s *Server) turn(w http.ResponseWriter, r *http.Request, _ loginSession) {
 	var p struct {
-		Message   string `json:"message"`
-		SessionID string `json:"session_id"`
+		Message   string            `json:"message"`
+		SessionID string            `json:"session_id"`
+		Model     ar.ModelSelection `json:"model"`
 	}
 	if !readJSON(w, r, &p) {
 		return
 	}
 	if !validSession(p.SessionID) || len(p.Message) == 0 || len(p.Message) > 16000 {
 		writeError(w, 400, "invalid_turn")
+		return
+	}
+	if _, err := ar.NormalizeModel(p.Model); err != nil {
+		writeError(w, 400, "invalid_model")
 		return
 	}
 	f, ok := w.(http.Flusher)
@@ -339,7 +347,7 @@ func (s *Server) turn(w http.ResponseWriter, r *http.Request, _ loginSession) {
 	f.Flush()
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	_, err := s.App.Host.Run(ctx, p.SessionID, p.Message, func(e store.Event) {
+	_, err := s.App.Host.RunWithModel(ctx, p.SessionID, p.Message, p.Model, func(e store.Event) {
 		b, _ := json.Marshal(e)
 		if _, writeErr := fmt.Fprintf(w, "id: %d\nevent: message\ndata: %s\n\n", e.Seq, b); writeErr != nil {
 			cancel()

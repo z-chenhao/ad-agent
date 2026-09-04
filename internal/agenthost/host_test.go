@@ -43,6 +43,34 @@ func testHost(t *testing.T, r ar.Runtime) (*Host, *fixture.Backend) {
 func call(name, args string) ar.Call {
 	return ar.Call{ID: store.ID("call"), Name: name, Arguments: json.RawMessage(args), Round: 1}
 }
+
+func TestSessionPinsExplicitModelSelection(t *testing.T) {
+	selected := ar.ModelSelection{Provider: ar.CodexProvider, Model: "gpt-5.4-mini", Reasoning: "medium"}
+	seen := []ar.ModelSelection{}
+	model := fakeRuntime(func(_ context.Context, request ar.Request, _ ar.Hooks) (ar.Result, error) {
+		seen = append(seen, request.Model)
+		return ar.Result{Stop: "stop", Text: "ok"}, nil
+	})
+	h, _ := testHost(t, model)
+	if _, err := h.RunWithModel(context.Background(), "model-session", "first", selected, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Run(context.Background(), "model-session", "second", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 || seen[0] != selected || seen[1] != selected {
+		t.Fatalf("runtime models=%#v", seen)
+	}
+	if _, err := h.RunWithModel(context.Background(), "model-session", "third", ar.DefaultModelSelection(), nil); err == nil || err.Error() != "session_model_mismatch" {
+		t.Fatalf("mismatch err=%v", err)
+	}
+	account, _ := h.Backend.Account(context.Background())
+	session, err := h.Store.Session(context.Background(), "model-session", account.Source)
+	if err != nil || session.Model != selected {
+		t.Fatalf("session model=%#v err=%v", session.Model, err)
+	}
+}
+
 func TestHostIsolationAndEvents(t *testing.T) {
 	model := fakeRuntime(func(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
 		for _, tool := range r.Tools {

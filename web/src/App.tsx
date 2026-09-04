@@ -33,6 +33,7 @@ import type {
   Memory,
   Report,
   RuntimeConfig,
+  ModelSelection,
   Session,
 } from "./types";
 import { Badge } from "./components/ui/badge";
@@ -225,6 +226,7 @@ function AssistantPanel({
   changes,
   onChange,
   onOpenInspector,
+  modelLabel,
   onClose,
 }: {
   sessionId: string;
@@ -240,6 +242,7 @@ function AssistantPanel({
   changes: Change[];
   onChange: (change: Change, action: ChangeAction) => void;
   onOpenInspector: () => void;
+  modelLabel: string;
   onClose?: () => void;
 }) {
   const end = useRef<HTMLDivElement>(null);
@@ -269,7 +272,7 @@ function AssistantPanel({
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">Ad Agent</div>
           <div className="truncate text-[11px] text-muted-foreground">
-            Session {sessionId}
+            Session {sessionId} · {modelLabel}
           </div>
         </div>
         <Button
@@ -700,6 +703,11 @@ export function Workspace() {
   const [page, setPage] = useState<Page>("home");
   const [account, setAccount] = useState<Account>();
   const [config, setConfig] = useState<RuntimeConfig>();
+  const [selectedModel, setSelectedModel] = useState<ModelSelection>(() => ({
+    provider: "openai-codex",
+    model: localStorage.getItem("ad-agent.model") ?? "gpt-5.6-luna",
+    reasoning: "medium",
+  }));
   const [error, setError] = useState("");
   const [overview, setOverview] = useState<{
     report: Report;
@@ -724,7 +732,11 @@ export function Workspace() {
   const [sessionId, setSessionId] = useState(
     () => localStorage.getItem("ad-agent.session") ?? "web",
   );
-  const [history, setHistory] = useState<Session>({ id: "web", messages: [] });
+  const [history, setHistory] = useState<Session>({
+    id: "web",
+    messages: [],
+    model: selectedModel,
+  });
   const [message, setMessage] = useState("");
   const [live, dispatch] = useReducer(reduceEvent, emptyLive);
   const [busy, setBusy] = useState(false);
@@ -734,6 +746,7 @@ export function Workspace() {
       "/session?session_id=" + encodeURIComponent(sessionId),
     );
     setHistory(session);
+    if (session.model?.provider) setSelectedModel(session.model);
     dispatch({
       v: "0",
       type: "client.reset",
@@ -760,7 +773,18 @@ export function Workspace() {
     setMemories(await api<Memory[]>("/memories"));
   useEffect(() => {
     void api<RuntimeConfig>("/config")
-      .then(setConfig)
+      .then((value) => {
+        setConfig(value);
+        setSelectedModel((current) =>
+          value.model.options.some(
+            (candidate) =>
+              candidate.provider === current.provider &&
+              candidate.model === current.model,
+          )
+            ? current
+            : value.model.default,
+        );
+      })
       .catch((reason) => setError(String(reason)));
     void api<Account>("/advertisers/current")
       .then(async (value) => {
@@ -812,7 +836,13 @@ export function Workspace() {
       ],
     }));
     try {
-      await streamTurn(sessionId, text, control.signal, dispatch);
+      await streamTurn(
+        sessionId,
+        text,
+        selectedModel,
+        control.signal,
+        dispatch,
+      );
     } catch (reason) {
       setError(
         control.signal.aborted
@@ -853,10 +883,10 @@ export function Workspace() {
     if (action === "apply") setConfirm(change);
     else void performChange(change, action);
   };
-  const newSession = () => {
+  const newSession = (model = selectedModel) => {
     const id = `web-${Date.now().toString(36)}`;
     setSessionId(id);
-    setHistory({ id, messages: [] });
+    setHistory({ id, messages: [], model });
     dispatch({
       v: "0",
       type: "client.reset",
@@ -866,6 +896,22 @@ export function Workspace() {
       data: {},
     });
   };
+  const selectModel = (model: string) => {
+    const option = config?.model.options.find(
+      (candidate) => candidate.model === model,
+    );
+    if (!option || busy) return;
+    const selection: ModelSelection = { ...option, reasoning: "medium" };
+    setSelectedModel(selection);
+    localStorage.setItem("ad-agent.model", model);
+    newSession(selection);
+  };
+  const modelLabel =
+    config?.model.options.find(
+      (option) =>
+        option.provider === selectedModel.provider &&
+        option.model === selectedModel.model,
+    )?.label ?? selectedModel.model;
   const pending = changes.filter((change) => change.state === "staged").length;
   const pageTitle = pages.find((item) => item.id === page)?.label ?? "Home";
   const assistantProps = {
@@ -877,7 +923,7 @@ export function Workspace() {
     busy,
     controller,
     send,
-    newSession,
+    newSession: () => newSession(),
     refresh: () => void loadSession(),
     changes,
     onChange: requestChange,
@@ -885,6 +931,7 @@ export function Workspace() {
       setMobileAssistant(false);
       setInspectorOpen(true);
     },
+    modelLabel,
   };
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -929,7 +976,7 @@ export function Workspace() {
                 : config?.runtime === "pi"
                   ? "Pi"
                   : "Agent"}{" "}
-              + Luna
+              + {modelLabel}
             </div>
             <p className="mt-1 text-[10px] leading-relaxed text-muted-foreground">
               ChatGPT OAuth · local runtime
@@ -1172,7 +1219,32 @@ export function Workspace() {
             The host projects the same tools, grounding rules, skills, and
             safety behavior into every runtime.
           </DialogDescription>
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 rounded-lg border border-border p-3">
+            <label htmlFor="model-selection" className="text-sm font-medium">
+              Model
+            </label>
+            <select
+              id="model-selection"
+              value={selectedModel.model}
+              disabled={busy}
+              onChange={(event) => selectModel(event.target.value)}
+              className="mt-2 h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none ring-offset-background focus:ring-2 focus:ring-ring"
+            >
+              {config?.model.options.map((option) => (
+                <option
+                  key={`${option.provider}/${option.model}`}
+                  value={option.model}
+                >
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Provider: {selectedModel.provider}. Changing the model starts a
+              new session so provider checkpoints cannot be mixed.
+            </p>
+          </div>
+          <div className="mt-3 space-y-3">
             {config?.harness.capabilities.map((capability) => (
               <div
                 key={capability.name}
@@ -1191,7 +1263,8 @@ export function Workspace() {
             presentation, independent read dispatch, and post-turn memory
             extraction are enforced by the Go host. The memory write filter
             rejects advertising identifiers, credentials, and transient
-            performance.
+            performance. Backend write execution is{" "}
+            {config?.writes ? "available behind approval" : "disabled"}.
           </p>
         </DialogContent>
       </Dialog>

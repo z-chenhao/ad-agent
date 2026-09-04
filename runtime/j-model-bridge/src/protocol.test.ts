@@ -8,6 +8,12 @@ import {
   toJMessage,
 } from "./protocol.js";
 
+const selection = {
+  provider: "openai-codex" as const,
+  model: "gpt-5.6-luna",
+  reasoning: "medium" as const,
+};
+
 function assistant(): AssistantMessage {
   return {
     role: "assistant",
@@ -40,7 +46,7 @@ function assistant(): AssistantMessage {
 
 test("replays only matching native assistant state", () => {
   const native = assistant();
-  const j = toJMessage(native);
+  const j = toJMessage(native, selection);
   const context = buildContext(
     {
       messages: [
@@ -56,6 +62,7 @@ test("replays only matching native assistant state", () => {
       ],
     },
     { version: 1, assistants: [native] },
+    selection,
   );
   assert.equal(context.systemPrompt, "system");
   assert.equal(context.messages[1], native);
@@ -73,15 +80,31 @@ test("rejects mismatched and non-Codex state", () => {
         ],
       },
       { version: 1, assistants: [native] },
+      selection,
     ),
   );
   assert.throws(() =>
-    parseState({ version: 1, assistants: [{ ...native, provider: "other" }] }),
+    parseState(
+      { version: 1, assistants: [{ ...native, provider: "other" }] },
+      selection,
+    ),
   );
 });
 
 test("bounds and validates frames", () => {
-  assert.equal(parseInput('{"type":"start"}').type, "start");
+  assert.equal(
+    parseInput(JSON.stringify({ type: "start", model: selection })).type,
+    "start",
+  );
+  assert.throws(() => parseInput('{"type":"start"}'));
+  assert.throws(() =>
+    parseInput(
+      JSON.stringify({
+        type: "start",
+        model: { ...selection, model: "unknown" },
+      }),
+    ),
+  );
   assert.throws(() => parseInput('{"type":"complete","id":"","request":{}}'));
   assert.throws(() => parseInput("x".repeat(8 * 1024 * 1024 + 1)));
 });
@@ -100,6 +123,7 @@ test("normalizes omitted empty reasoning text from Go", () => {
         ],
       },
       { version: 1, assistants: [native] },
+      selection,
     ),
   );
 });

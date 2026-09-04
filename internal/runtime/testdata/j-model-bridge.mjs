@@ -3,11 +3,13 @@ import { createInterface } from "node:readline";
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 const send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 let state = { version: 1, assistants: [] };
+let model = { provider: "openai-codex", model: "gpt-5.6-luna" };
 
 input.on("line", (line) => {
   const frame = JSON.parse(line);
   if (frame.type === "start") {
     state = frame.provider_state ?? state;
+    model = frame.model ?? model;
     send({ type: "ready" });
     return;
   }
@@ -36,8 +38,8 @@ input.on("line", (line) => {
       id: frame.id,
       response: {
         message,
-        provider: "openai-codex",
-        model: "gpt-5.6-luna",
+        provider: model.provider,
+        model: model.model,
         stopReason: "tool_calls",
         usage: {
           inputTokens: 2,
@@ -65,8 +67,8 @@ input.on("line", (line) => {
     id: frame.id,
     response: {
       message,
-      provider: "openai-codex",
-      model: "gpt-5.6-luna",
+      provider: model.provider,
+      model: model.model,
       stopReason: "stop",
       usage: {
         inputTokens: 4,

@@ -1,25 +1,36 @@
 # AdBackend contract v0
 
-Status: experimental implementation baseline v0.7. Fixture and read-only TikTok HTTP
-adapters exist. Live advertiser semantics have not yet been validated.
+Status: experimental implementation baseline v0.9. Fixture and TikTok HTTP adapters
+implement reads and host-only writes. Live advertiser semantics have not yet been
+validated.
 
 ## Decision
 
 TikTok MAPI is an external protocol. `tiktokmapi.Backend` and `fixture.Backend`
-implement the same narrow read contract. AgentRuntime and AdBackend vary independently:
+implement the same complete AdBackend. AgentRuntime and AdBackend vary independently:
 changing Pi, J-agent, or a future runtime does not rewrite advertising integration;
 changing the data source does not rewrite conversation, analysis, or approval behavior.
 
 ```go
-type Backend interface {
+type Reader interface {
     Account(context.Context) (Account, error)
     List(context.Context, EntityQuery) ([]Entity, error)
     Get(context.Context, Level, string) (Entity, error)
     Report(context.Context, ReportQuery) (Report, error)
 }
+
+type Writer interface {
+    Write(context.Context, WriteRequest) WriteOutcome
+}
+
+type Backend interface {
+    Reader
+    Writer
+}
 ```
 
-This interface supports the current active workflow set. It must not be stretched into
+The unified Backend is split by capability at composition time: the agent host receives
+Reader and the change service receives Writer. It must not be stretched into
 a generic `Execute(name, map)` to cover documented future APIs. Each staged workflow
 earns a typed capability interface from actual consumer fields and platform evidence.
 
@@ -92,7 +103,9 @@ Before a staged skill becomes active:
 The change ledger is not part of Backend. A host-only writer is injected only into the
 change service. The model never obtains it.
 
-The writer reports not-sent, rejected, acknowledged, or unknown. The service owns
+The TikTok writer currently supports single-object campaign/ad-group budget updates and
+campaign/ad-group/ad operation-status updates. It is disabled by default. The writer
+reports not-sent, rejected, acknowledged, or unknown. The service owns
 `staged -> applying -> applied|failed|expired|indeterminate`, atomic claims, approval
 records, revalidation, guardrails, execution attempts, read-back, and reconciliation.
 Network calls never hold the database transaction lock. A crash after possible send is

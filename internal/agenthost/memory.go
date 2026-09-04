@@ -36,7 +36,7 @@ var memoryExtractionTool = ar.Tool{
 
 // extractMemory is deliberately best-effort: the operator's completed answer must not
 // be turned into a failed turn by a secondary personalization call.
-func (h *Host) extractMemory(turnID string, source ads.Source, userText, assistantText string, event func(string, any)) {
+func (h *Host) extractMemory(turnID string, source ads.Source, userText, assistantText string, model ar.ModelSelection, event func(string, any)) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	existing, err := h.Store.Memories(ctx, source, 50)
@@ -64,7 +64,7 @@ func (h *Host) extractMemory(turnID string, source ads.Source, userText, assista
 	count := 0
 	_, _ = h.Runtime.Run(ctx, ar.Request{
 		System: memoryExtractionSystem, Prompt: prompt, Tools: []ar.Tool{memoryExtractionTool},
-		MaxRounds: 4, SessionDir: filepath.Join(h.Store.Dir, "runtime", turnID, "memory"),
+		MaxRounds: 4, SessionDir: filepath.Join(h.Store.Dir, "runtime", turnID, "memory"), Model: model,
 	}, ar.Hooks{Execute: func(callCtx context.Context, call ar.Call) ar.ToolResult {
 		if call.Name != memoryExtractionTool.Name || len(call.Arguments) > 2048 {
 			return ar.Failure("invalid_memory_proposal")

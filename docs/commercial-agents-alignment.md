@@ -8,7 +8,7 @@ catalog, cart, customer, and order semantics are outside the advertising domain.
 
 | Commercial Agents capability                   | Ad Agent implementation                                                                                                | Status                                                     |
 | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| One operating contract across runtime variants | `AGENT.md`, the generated active-skill index, and the same typed Go tools are supplied to Pi and J-agent               | Aligned                                                    |
+| One operating contract across runtime variants | `prompts/ad-agent-system.md`, the generated active-skill index, and the same typed Go tools are supplied to Pi and J-agent | Aligned                                                    |
 | Capability-gated skills                        | One validated manifest generates runtime discovery; staged TikTok workflows remain unavailable until their tools exist | Aligned                                                    |
 | Ground before analysis                         | The Go harness performs intent-specific report or pending-change grounding before the model loop                       | Aligned                                                    |
 | Follow through on requested changes            | A second bounded pass runs if an actionable request ends without a stage attempt                                       | Aligned                                                    |
@@ -27,8 +27,9 @@ catalog, cart, customer, and order semantics are outside the advertising domain.
 
 ## What is deliberately different
 
-- ChatGPT OAuth and `openai-codex/gpt-5.6-luna` replace Anthropic credentials and Claude
-  runtimes. Model transport is a private adapter choice, not an advertising contract.
+- ChatGPT OAuth and a session-pinned `openai-codex` model replace Anthropic credentials
+  and Claude runtimes. Luna is the default, not a hard-coded product contract. Direct
+  OpenAI and DeepSeek API transports remain future private adapters.
 - Go owns advertising authority, provenance, approval, audit, and SSE. React never owns
   a write decision. This preserves runtime replacement with Pi, J-agent, Claude SDK, or a
   future adapter at a settled turn boundary.
@@ -48,4 +49,5 @@ platform acceptance:
 2. add golden conversations as each staged workflow becomes executable;
 3. verify TikTok authorization, field semantics, attribution, and reconciliation after
    developer-app approval;
-4. keep live writes disabled until a separate controlled-write acceptance gate passes.
+4. validate the implemented TikTok Writer with a controlled object before enabling it
+   outside HTTP-fake tests.

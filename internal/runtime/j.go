@@ -35,6 +35,8 @@ type J struct {
 type jCheckpoint struct {
 	Version       int              `json:"version"`
 	SystemSHA256  string           `json:"system_sha256"`
+	Provider      string           `json:"provider,omitempty"`
+	Model         string           `json:"model,omitempty"`
 	History       []jagent.Message `json:"history"`
 	ProviderState json.RawMessage  `json:"provider_state"`
 }
@@ -59,6 +61,11 @@ type jBridgeModel struct {
 }
 
 func (j J) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
+	selection, err := NormalizeModel(r.Model)
+	if err != nil {
+		return Result{}, err
+	}
+	r.Model = selection
 	if r.MaxRounds < 1 || r.MaxRounds > 16 {
 		return Result{}, errors.New("invalid round budget")
 	}
@@ -78,7 +85,7 @@ func (j J) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	model, err := startJBridge(ctx, j, checkpoint.ProviderState)
+	model, err := startJBridge(ctx, j, checkpoint.ProviderState, r.Model)
 	if err != nil {
 		return Result{}, err
 	}
@@ -91,7 +98,7 @@ func (j J) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 			Name: tool.Name, Description: tool.Description, InputSchema: append(json.RawMessage(nil), tool.Parameters...),
 		}, state: state})
 	}
-	bounded := &jBoundedModel{inner: model, maxRounds: r.MaxRounds, state: state}
+	bounded := &jBoundedModel{inner: model, maxRounds: r.MaxRounds, state: state, model: r.Model}
 	options := []jagent.Option{jagent.WithTools(tools...)}
 	if len(checkpoint.History) > 0 {
 		options = append(options, jagent.WithHistory(checkpoint.History...))
@@ -142,7 +149,7 @@ func (j J) Run(ctx context.Context, r Request, h Hooks) (Result, error) {
 	if r.SessionDir != "" {
 		checkpointPath, err = saveJCheckpoint(r.SessionDir, jCheckpoint{
 			Version: jCheckpointVersion, SystemSHA256: systemDigest(r.System),
-			History: runner.History(), ProviderState: model.providerState(),
+			History: runner.History(), ProviderState: model.providerState(), Provider: r.Model.Provider, Model: r.Model.Model,
 		})
 		if err != nil {
 			return Result{}, err
@@ -169,6 +176,7 @@ type jBoundedModel struct {
 	calls     int
 	budget    bool
 	state     *jToolState
+	model     ModelSelection
 }
 
 func (m *jBoundedModel) Complete(ctx context.Context, req jagent.ModelRequest, emit func(jagent.ModelDelta)) (jagent.ModelResponse, error) {
@@ -186,7 +194,7 @@ func (m *jBoundedModel) Complete(ctx context.Context, req jagent.ModelRequest, e
 	if err != nil {
 		return response, err
 	}
-	if response.Provider != "openai-codex" || response.Model != "gpt-5.6-luna" {
+	if response.Provider != m.model.Provider || response.Model != m.model.Model {
 		return jagent.ModelResponse{}, errors.New("unexpected provider or model")
 	}
 	calls := response.Message.ToolCalls()
@@ -301,7 +309,7 @@ func (t *jTool) Call(ctx context.Context, arguments json.RawMessage) (string, er
 	return output, nil
 }
 
-func startJBridge(ctx context.Context, j J, state json.RawMessage) (*jBridgeModel, error) {
+func startJBridge(ctx context.Context, j J, state json.RawMessage, selection ModelSelection) (*jBridgeModel, error) {
 	node := j.Node
 	if node == "" {
 		node = "node"
@@ -325,7 +333,8 @@ func startJBridge(ctx context.Context, j J, state json.RawMessage) (*jBridgeMode
 	if err = json.NewEncoder(in).Encode(struct {
 		Type          string          `json:"type"`
 		ProviderState json.RawMessage `json:"provider_state,omitempty"`
-	}{Type: "start", ProviderState: state}); err != nil {
+		Model         ModelSelection  `json:"model"`
+	}{Type: "start", ProviderState: state, Model: selection}); err != nil {
 		m.close()
 		return nil, errors.New("J model bridge start failed")
 	}
@@ -404,7 +413,7 @@ func (m *jBridgeModel) close() {
 }
 
 func loadJCheckpoint(r Request) (jCheckpoint, error) {
-	empty := jCheckpoint{Version: jCheckpointVersion, SystemSHA256: systemDigest(r.System), ProviderState: json.RawMessage(`{"version":1,"assistants":[]}`)}
+	empty := jCheckpoint{Version: jCheckpointVersion, SystemSHA256: systemDigest(r.System), Provider: r.Model.Provider, Model: r.Model.Model, ProviderState: json.RawMessage(`{"version":1,"assistants":[]}`)}
 	if r.Checkpoint == "" {
 		return empty, nil
 	}
@@ -436,6 +445,14 @@ func loadJCheckpoint(r Request) (jCheckpoint, error) {
 	var checkpoint jCheckpoint
 	if json.Unmarshal(b, &checkpoint) != nil || checkpoint.Version != jCheckpointVersion || checkpoint.SystemSHA256 != systemDigest(r.System) || len(checkpoint.ProviderState) > jFrameLimit {
 		return jCheckpoint{}, errors.New("invalid J checkpoint")
+	}
+	// v1 checkpoints created before model selection were pinned to Luna.
+	if checkpoint.Provider == "" && checkpoint.Model == "" {
+		checkpoint.Provider = CodexProvider
+		checkpoint.Model = DefaultModel
+	}
+	if checkpoint.Provider != r.Model.Provider || checkpoint.Model != r.Model.Model {
+		return jCheckpoint{}, errors.New("J checkpoint model mismatch")
 	}
 	return checkpoint, nil
 }
@@ -488,7 +505,7 @@ func sameJSON(a, b json.RawMessage) bool {
 
 func safeJBridgeCode(code string) string {
 	switch code {
-	case "assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing":
+	case "assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing", "invalid_model":
 		return code
 	default:
 		return "runtime_failed"
@@ -496,7 +513,7 @@ func safeJBridgeCode(code string) string {
 }
 
 func safeJBridgeError(err error) string {
-	for _, code := range []string{"assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing"} {
+	for _, code := range []string{"assistant_state_mismatch", "assistant_state_count_mismatch", "invalid_request", "invalid_state", "invalid_assistant", "invalid_message", "invalid_content", "invalid_system", "invalid_tool", "invalid_tool_result", "unexpected_non_text_content", "provider_failed", "provider_incomplete", "oauth_or_model_missing", "invalid_model"} {
 		if strings.Contains(err.Error(), code) {
 			return code
 		}

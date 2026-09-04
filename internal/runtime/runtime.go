@@ -38,6 +38,7 @@ func Failure(code string) ToolResult { return ToolResult{Error: code} }
 type Request struct {
 	System     string `json:"system"`
 	Prompt     string `json:"prompt"`
+	Model      ModelSelection `json:"model"`
 	Tools      []Tool `json:"tools"`
 	MaxRounds  int    `json:"max_rounds"`
 	Checkpoint string `json:"checkpoint,omitempty"`

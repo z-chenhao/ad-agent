@@ -2,14 +2,15 @@
 
 Ad Agent is a single-user, local-first TikTok advertising operations assistant. Go owns
 advertising data, deterministic calculations, tools, approvals, and audit state. Pi or
-J-agent owns the model loop through ChatGPT OAuth and explicitly selects
-`openai-codex/gpt-5.6-luna`. React uses shadcn/ui-compatible local components and
+J-agent owns the model loop through ChatGPT OAuth. The default is
+`openai-codex/gpt-5.6-luna`; the CLI and Web UI can select another validated Codex model
+for a new session. React uses shadcn/ui-compatible local components and
 Tailwind CSS against the same Go host.
 
 The repository currently provides a complete fixture-based CLI and Web loop plus a
-read-only TikTok MAPI adapter verified against an HTTP fake. Fixture data is fictional.
-Without local TikTok authorization, the app sends no TikTok request. Live writes remain
-disabled.
+TikTok MAPI AdBackend verified against an HTTP fake for reads and writes. Fixture data is
+fictional. Without local TikTok authorization, the app sends no TikTok request. TikTok
+writes remain disabled by default and have not passed the live-platform gate.
 
 ## Run
 
@@ -24,11 +25,13 @@ make cli
 ./bin/ad-agent report --level campaign --start 2022-07-11 --end 2022-07-17
 ./bin/ad-agent chat --message 'Compare the latest seven days with the prior seven days and identify which campaign contributed most to the ROAS change.'
 ./bin/ad-agent chat --runtime j --session j-lab --message 'Read the account and list its campaigns.'
+./bin/ad-agent chat --model gpt-5.4-mini --session mini-lab --message 'Give me a concise account briefing.'
 ```
 
 Use `--json` for a final structured result, `--events` for public lifecycle NDJSON, and
 `--session` to select a session. State is kept under `.data/`, which must remain private
-with mode `0700`. Use a new session when changing `--runtime` between `pi` and `j`.
+with mode `0700`. Runtime and model are pinned to a session; create a new session to
+change either one.
 Successful turns use a separate best-effort pass to retain durable business preferences;
 use `--auto-memory=false` to disable that local feature.
 
@@ -43,6 +46,8 @@ implementations. The editable source is available in
 
 The capability-by-capability comparison with Anthropic Commercial Agents is documented
 in [`docs/commercial-agents-alignment.md`](docs/commercial-agents-alignment.md).
+Repository automation follows [`AGENTS.md`](AGENTS.md); the product runtime receives the
+separate [`prompts/ad-agent-system.md`](prompts/ad-agent-system.md) system contract.
 
 ## Web and approvals
 
@@ -61,7 +66,20 @@ at a time, Changes owns approval and reconciliation, and the assistant remains a
 as a side rail. Its inspector shows public activity and saved business memory, not model
 reasoning.
 
-The model can create budget and status drafts, but it cannot approve or apply them.
+The model can create budget and status drafts, but it cannot approve or apply them. The
+fixture AdBackend supports approval end to end. TikTok implements the same AdBackend,
+but its Writer is injected only when the operator starts the host with explicit write
+enablement and all three budget guardrails:
+
+```sh
+./bin/ad-agent serve --backend tiktok --tiktok-advertiser ADVERTISER_ID \
+  --enable-tiktok-writes --tiktok-min-budget 20 --tiktok-max-budget 500 \
+  --tiktok-max-budget-delta-percent 10
+```
+
+Do not enable that mode until app approval and a controlled write acceptance test. It
+supports one approved campaign/ad-group budget update or campaign/ad-group/ad status
+update per change; it does not create ads.
 
 ```sh
 ./bin/ad-agent chat --message 'Read campaign_example_1 and draft a change from its current total budget to 55 USD. Do not apply it.'

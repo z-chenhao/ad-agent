@@ -23,10 +23,19 @@ test("authenticated overview and consistent hierarchy", async ({
   await login(page);
   await expect(
     page.getByText(
-      process.env.AD_AGENT_E2E_RUNTIME === "j" ? "J-agent + Luna" : "Pi + Luna",
+      process.env.AD_AGENT_E2E_RUNTIME === "j"
+        ? "J-agent + GPT-5.6 Luna"
+        : "Pi + GPT-5.6 Luna",
       { exact: true },
     ),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Capabilities" }).click();
+  await expect(page.getByLabel("Model")).toHaveValue("gpt-5.6-luna");
+  await expect(page.getByLabel("Model").locator("option")).toHaveCount(7);
+  await expect(
+    page.getByText("Provider: openai-codex", { exact: false }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
   const metrics = page.getByLabel("Performance metrics").first();
   await expect(metrics).toContainText("21");
   await expect(metrics).toContainText("35");
@@ -63,7 +72,9 @@ test("login, CSRF and source file boundary", async ({ page }) => {
     data: { session_id: "web", message: "read" },
   });
   expect(response.status()).toBe(403);
-  expect((await page.request.get("/AGENT.md")).status()).toBe(404);
+  expect((await page.request.get("/prompts/ad-agent-system.md")).status()).toBe(
+    404,
+  );
 });
 test("mobile layout stays inside viewport", async ({ page }, info) => {
   await page.setViewportSize({ width: 390, height: 844 });

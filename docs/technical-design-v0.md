@@ -1,7 +1,7 @@
 # Ad Agent technical design v0
 
-Status: implementation baseline v0.8, 2026-09-04. The Pi/J CLI and React fixture
-loops work; the TikTok HTTP adapter is read-only and has only HTTP-fake evidence. The
+Status: implementation baseline v0.9, 2026-09-04. The Pi/J CLI and React fixture
+loops work; the TikTok HTTP adapter has read/write HTTP-fake evidence only. The
 developer app is still pending platform approval.
 
 TikTok contract baseline: official Business API SDK commit
@@ -12,8 +12,8 @@ TikTok contract baseline: official Business API SDK commit
 Build a local advertising operations agent for one authenticated operator and one
 host-bound TikTok advertiser. Go owns domain truth, tools, safety gates, change state,
 audit, HTTP, and SSE. React owns presentation. Pi and J-agent are replaceable private
-runtime adapters; both explicitly use `openai-codex/gpt-5.6-luna` through the user's
-existing ChatGPT OAuth.
+runtime adapters. Both use explicit session-pinned provider/model configuration through
+the user's existing ChatGPT OAuth; `openai-codex/gpt-5.6-luna` remains the default.
 
 The product adopts a capability-gated harness:
 
@@ -54,7 +54,8 @@ scope, advertiser, region, or account type may use them.
 Downstream contracts:
 
 - TikTok Business API v1.3 and the app's granted scopes;
-- Pi's `openai-codex-responses` transport and ChatGPT OAuth;
+- Pi's `openai-codex-responses` transport, the current Codex model allowlist, and
+  ChatGPT OAuth;
 - the Go domain, store, executor, and HTTP/SSE protocol;
 - React's discriminated presentation records;
 - SQLite session, provenance, change, approval, attempt, memory, and audit records.
@@ -76,9 +77,10 @@ Downstream contracts:
 
 ### Current policy
 
-Single user, local deployment, TikTok first, Pi/J, Luna, six parent tool rounds, two
-analysis delegates, eight child rounds, one object per change, and live writes disabled
-are current policies. They are not public runtime semantics.
+Single user, local deployment, TikTok first, Pi/J, Luna as the default, medium reasoning,
+six parent tool rounds, two analysis delegates, eight child rounds, one object per
+change, and TikTok writes disabled by default are current policies. They are not public
+runtime semantics.
 
 ## Harness alignment assessment
 
@@ -100,7 +102,7 @@ v0.8 closes the runtime-neutral harness and operator-loop gaps:
   stop after the terminal suggestion presentation;
 - `present_digest` produces a server-enriched decision queue and presentation calls
   emit an immediate pending UI record before their trusted replacement;
-- a post-turn isolated Luna pass extracts only durable operator preferences,
+- a post-turn isolated pass on the session model extracts only durable operator preferences,
   constraints, and goals into account-scoped memory;
 - the React portal follows the operator journey through overview, hierarchy, change
   review, assistant, activity, and memory rather than exposing one dashboard page.
@@ -117,16 +119,17 @@ the current advertising analysis contract with a smaller attack surface. See
 ```text
 Authenticated operator -> React -> Go HTTP/SSE host -> SQLite
                                    |
-                                   +-> selected runtime
-                                   |     +-> Pi full-agent sidecar -> Luna
-                                   |     +-> J-agent loop -> model-only bridge -> Luna
+                                   +-> session-pinned provider/model
+                                   |     +-> Pi full-agent sidecar
+                                   |     +-> J-agent loop -> model-only bridge
+                                   |     +-> openai-codex / ChatGPT OAuth
                                    |
                                    +-> one tool executor -> provenance and gates
-                                                         -> AdBackend
+                                                         -> AdBackend (Reader + Writer)
                                                               +-> fixture
                                                               +-> TikTok MAPI
 
-Host approval route -> change service -> host-only AdWriter
+Host approval route -> change service -> host-only AdBackend.Writer slice
 Analysis delegate   -> bounded snapshots and deterministic calculations only
 ```
 
@@ -151,7 +154,9 @@ The seam is repository-private and experimental. It contains the static contract
 fenced context, ordered tools, budget, and an opaque checkpoint reference. It does not
 contain a TikTok credential or an approval mark. Switching runtime is allowed only at a
 settled turn boundary and starts a new runtime session from portable user-visible facts.
-Provider-native reasoning and checkpoint state never migrate between adapters.
+Provider-native reasoning and checkpoint state never migrate between adapters or model
+selections. The current validated provider is `openai-codex`; direct OpenAI API and
+DeepSeek API transports are experimental future adapters, not installed capabilities.
 
 ## Analysis delegate
 
@@ -229,7 +234,8 @@ tool lifecycle facts and account-scoped business memory, never provider reasonin
 
 ## Memory extraction
 
-After a successful main turn, the host may run a separate Luna session with exactly one
+After a successful main turn, the host may run a separate session on the selected model
+with exactly one
 private `record_memory_fact` tool. It receives only user and assistant text, never tool
 payloads, account objects, or the main provider checkpoint. The host accepts at most
 three durable operator-stated preferences, constraints, or goals and rejects credentials,

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/shopspring/decimal"
 	"github.com/z-chenhao/ad-agent/internal/ads"
 	"github.com/z-chenhao/ad-agent/internal/app"
 	"github.com/z-chenhao/ad-agent/internal/httpapi"
@@ -43,6 +44,8 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	fs.SetOutput(out)
 	root := fs.String("root", ".", "project root containing the built runtime bridges")
 	runtimeName := fs.String("runtime", "pi", "agent runtime: pi or j; do not switch within a session")
+	provider := fs.String("provider", ar.CodexProvider, "model provider; currently openai-codex")
+	model := fs.String("model", ar.DefaultModel, "model ID; use --help or the Web capability panel for supported models")
 	data := fs.String("data-dir", ".data", "private local state directory with mode 0700")
 	session := fs.String("session", "local", "session ID")
 	message := fs.String("message", "", "single-turn message; omit for interactive mode")
@@ -60,6 +63,10 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 	tiktokEnvironment := fs.String("tiktok-environment", "sandbox", "TikTok environment: sandbox or live")
 	tiktokBaseURL := fs.String("tiktok-base-url", tiktokmapi.DefaultBaseURL, "TikTok MAPI HTTPS base URL")
 	tiktokRevenueMetric := fs.String("tiktok-revenue-metric", "", "validated revenue metric; empty disables live ROAS")
+	enableTikTokWrites := fs.Bool("enable-tiktok-writes", false, "enable approval-gated TikTok budget and status writes")
+	tiktokMinBudget := fs.String("tiktok-min-budget", "", "minimum approved TikTok budget; required when writes are enabled")
+	tiktokMaxBudget := fs.String("tiktok-max-budget", "", "maximum approved TikTok budget; required when writes are enabled")
+	tiktokMaxDelta := fs.String("tiktok-max-budget-delta-percent", "", "maximum approved budget delta percent; required when writes are enabled")
 	redirectURL := fs.String("redirect-url", "", "exact registered HTTPS or localhost root callback URL")
 	authorizationURL := fs.String("authorization-url", "", "advertiser authorization URL copied from TikTok My Apps")
 	if e := fs.Parse(args[1:]); e != nil {
@@ -171,7 +178,18 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		if err != nil {
 			return err
 		}
-		a, e = app.OpenBackendRuntime(*data, realBackend, selectedRuntime)
+		if *enableTikTokWrites {
+			minBudget, minErr := decimal.NewFromString(*tiktokMinBudget)
+			maxBudget, maxErr := decimal.NewFromString(*tiktokMaxBudget)
+			maxDelta, deltaErr := decimal.NewFromString(*tiktokMaxDelta)
+			if minErr != nil || maxErr != nil || deltaErr != nil || !minBudget.IsPositive() || !maxBudget.IsPositive() || !maxDelta.IsPositive() || minBudget.GreaterThan(maxBudget) {
+				return errors.New("enabled TikTok writes require valid positive min budget, max budget, and max budget delta percent")
+			}
+			policy := ads.Policy{MinBudget: minBudget, MaxBudget: maxBudget, MaxDeltaPercent: maxDelta, LiveWrites: true}
+			a, e = app.OpenAdBackendRuntime(*data, realBackend, policy, selectedRuntime)
+		} else {
+			a, e = app.OpenBackendRuntime(*data, realBackend, selectedRuntime)
+		}
 	} else {
 		return errors.New("backend must be fixture or tiktok")
 	}
@@ -179,6 +197,10 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return e
 	}
 	defer a.Store.Close()
+	selection := ar.ModelSelection{Provider: *provider, Model: *model, Reasoning: "medium"}
+	if err := a.Host.ConfigureModel(selection); err != nil {
+		return err
+	}
 	a.Host.AutomaticMemoryCapture = *autoMemory
 	encode := func(v any) error { enc := json.NewEncoder(out); enc.SetIndent("", "  "); return enc.Encode(v) }
 	switch command {
@@ -193,7 +215,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 			return err
 		}
 		server := &http.Server{Addr: *addr, Handler: handler.Handler(), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
-		fmt.Fprintf(out, "Ad Agent: %s\nThe login key is stored at %s (never send it to chat or commit it).\nSource: %s; runtime: %s; the main app is not connected to the port 3000 tunnel.\n", origin, filepath.Join(a.Store.Dir, "operator-key"), *backendName, *runtimeName)
+		fmt.Fprintf(out, "Ad Agent: %s\nThe login key is stored at %s (never send it to chat or commit it).\nSource: %s; runtime: %s; model: %s/%s; writes: %t; the main app is not connected to the port 3000 tunnel.\n", origin, filepath.Join(a.Store.Dir, "operator-key"), *backendName, *runtimeName, selection.Provider, selection.Model, a.Writable)
 		go func() {
 			<-ctx.Done()
 			stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -268,7 +290,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 				}
 			}
 		}
-		result, err := a.Host.Run(ctx, *session, text, emit)
+		result, err := a.Host.RunWithModel(ctx, *session, text, selection, emit)
 		if *asJSON && !*events {
 			if e := encode(result); e != nil {
 				return e
@@ -293,7 +315,7 @@ func run(ctx context.Context, args []string, in io.Reader, out io.Writer) error 
 		return chat(*message)
 	}
 	if !*asJSON && !*events {
-		fmt.Fprintf(out, "Ad Agent / %s / %s + Luna\nEnter /exit to quit. Approval requires a separate approve --id command.\n", *backendName, *runtimeName)
+		fmt.Fprintf(out, "Ad Agent / %s / %s / %s\nEnter /exit to quit. Approval requires a separate approve --id command.\n", *backendName, *runtimeName, selection.Model)
 	}
 	scan := bufio.NewScanner(in)
 	scan.Buffer(make([]byte, 4096), 16001)

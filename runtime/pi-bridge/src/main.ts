@@ -38,8 +38,8 @@ async function run(req: Start) {
     allowModelNetwork: false,
     signal: AbortSignal.timeout(10_000),
   });
-  const model = runtime.getModel("openai-codex", "gpt-5.6-luna");
-  if (!model || !runtime.isUsingOAuth("openai-codex"))
+  const model = runtime.getModel(req.model.provider, req.model.model);
+  if (!model || !runtime.isUsingOAuth(req.model.provider))
     throw new Error("oauth_or_model_missing");
   const resources: ResourceLoader = {
     getExtensions: () => ({
@@ -108,7 +108,7 @@ async function run(req: Start) {
     cwd,
     model,
     modelRuntime: runtime,
-    thinkingLevel: "medium",
+    thinkingLevel: req.model.reasoning,
     tools: req.tools.map((t) => t.name),
     customTools: tools,
     resourceLoader: resources,
