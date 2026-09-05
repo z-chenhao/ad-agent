@@ -1,0 +1,166 @@
+[
+  {
+    "name": "analysis_get_dataset",
+    "description": "Read a bounded view of an explicitly delegated dataset.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dataset_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["dataset_ref"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "analysis_slice",
+    "description": "Create a dataset filtered by exact entity or a contained date window; computations still use all matching rows.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dataset_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "entity_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "start_date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "end_date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        }
+      },
+      "required": ["dataset_ref"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "analysis_calculate",
+    "description": "Compute ratios/ranking, or compare equal non-overlapping compatible periods. Go owns every numeric value.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "dataset_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "operation": {
+          "type": "string",
+          "enum": ["rank", "compare"]
+        },
+        "previous_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": ["dataset_ref", "operation"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "report_progress",
+    "description": "Report a brief public activity status; never private reasoning.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        }
+      },
+      "required": ["message"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "submit_analysis",
+    "description": "Submit the only successful analysis result. Findings must reference computed evidence; do not supply invented numeric fields.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1600
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "evidence_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "entity_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128,
+                "description": "Optional. Include only when this exact ID appears in the referenced calculation ranking or comparison contributions. Omit for totals, limitations, or cross-entity observations."
+              },
+              "observation": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              }
+            },
+            "required": ["evidence_id", "observation"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "maxItems": 12,
+          "uniqueItems": true
+        },
+        "counter_evidence": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 800
+        }
+      },
+      "required": [
+        "summary",
+        "findings",
+        "counter_evidence",
+        "limitations",
+        "method"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

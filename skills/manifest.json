@@ -1,0 +1,175 @@
+{
+  "version": "1",
+  "skills": [
+    {
+      "name": "account-operations",
+      "status": "active",
+      "scopes": ["advertiser"],
+      "description": "Running the advertiser operating cadence: readiness, daily triage, hierarchy and delivery checks, finance monitoring, and governed budget or status changes.",
+      "official_api_areas": [
+        "Account Management",
+        "Reporting",
+        "Campaign",
+        "Adgroup",
+        "Ad",
+        "Business Center Payment"
+      ],
+      "required_tools": [
+        "get_advertiser_context",
+        "list_campaigns",
+        "list_ad_groups",
+        "list_ads",
+        "get_entity",
+        "get_performance_report",
+        "get_pending_changes",
+        "get_billing_balance",
+        "list_billing_transactions",
+        "stage_budget_change",
+        "stage_status_change",
+        "discard_change",
+        "present_digest",
+        "present_change_preview"
+      ]
+    },
+    {
+      "name": "performance-insights",
+      "status": "active",
+      "scopes": ["advertiser"],
+      "description": "Monitoring and diagnosing delivery, funnel, value, and creative performance with comparable windows, contribution analysis, counter-evidence, and explicit uncertainty.",
+      "official_api_areas": ["Reporting", "Ad", "Creative Management"],
+      "required_tools": [
+        "get_performance_report",
+        "list_campaigns",
+        "list_ad_groups",
+        "list_ads",
+        "list_creative_assets",
+        "get_creative_review",
+        "run_analysis",
+        "present_metrics",
+        "present_entities"
+      ]
+    },
+    {
+      "name": "campaign-operations",
+      "status": "active",
+      "scopes": ["advertiser"],
+      "description": "Building disabled campaign bundles and preparing reviewed campaign, ad-group, targeting, bid, schedule, creative, budget, and delivery changes.",
+      "official_api_areas": [
+        "Campaign",
+        "Adgroup",
+        "Ad",
+        "Identity",
+        "Creative Management",
+        "Audience",
+        "Measurement"
+      ],
+      "required_tools": [
+        "get_advertiser_context",
+        "list_identities",
+        "list_creative_assets",
+        "list_audiences",
+        "list_event_sources",
+        "get_targeting_options",
+        "get_entity",
+        "stage_campaign_bundle",
+        "stage_ad_group_update",
+        "stage_ad_creative_update",
+        "stage_budget_change",
+        "stage_status_change",
+        "present_change_preview"
+      ]
+    },
+    {
+      "name": "audience-and-assets",
+      "status": "active",
+      "scopes": ["advertiser"],
+      "description": "Managing reusable audience and asset readiness across targeting, identities, creative review, catalogs, lead forms, and ad-comment operations without exposing customer data.",
+      "official_api_areas": [
+        "Audience",
+        "Tool",
+        "Identity",
+        "Creative Management",
+        "Catalog",
+        "Lead Management",
+        "Comments"
+      ],
+      "required_tools": [
+        "list_audiences",
+        "get_audience",
+        "get_audience_overlap",
+        "get_targeting_options",
+        "stage_audience_create",
+        "list_identities",
+        "list_creative_assets",
+        "get_creative_review",
+        "list_catalogs",
+        "get_catalog_feed_health",
+        "get_catalog_product_health",
+        "list_lead_forms",
+        "get_lead_form",
+        "list_comments",
+        "stage_comment_action",
+        "present_change_preview"
+      ]
+    },
+    {
+      "name": "measurement-and-automation",
+      "status": "active",
+      "scopes": ["advertiser"],
+      "description": "Operating measurement readiness and bounded automation through event-source checks, attribution evidence, source creation, rule audits, and approval-gated rule drafts.",
+      "official_api_areas": [
+        "Measurement",
+        "App Management",
+        "Reporting",
+        "Automated Rules"
+      ],
+      "required_tools": [
+        "list_event_sources",
+        "get_event_stats",
+        "get_optimization_events",
+        "get_attribution_settings",
+        "stage_event_source_create",
+        "list_automated_rules",
+        "get_automated_rule_results",
+        "stage_automated_rule_create",
+        "present_change_preview"
+      ]
+    },
+    {
+      "name": "manager-operations",
+      "status": "active",
+      "scopes": ["manager"],
+      "description": "Triaging authorized advertiser accounts and preparing independent advertiser-scoped changes without collapsing currency, attribution, identity, or approval boundaries.",
+      "official_api_areas": [
+        "Account Management",
+        "Reporting",
+        "Campaign",
+        "Adgroup",
+        "Ad"
+      ],
+      "required_tools": [
+        "list_advertisers",
+        "get_manager_performance",
+        "run_manager_analysis",
+        "list_account_entities",
+        "get_account_entity",
+        "stage_account_budget_change",
+        "stage_account_status_change",
+        "get_pending_changes",
+        "load_skill"
+      ]
+    },
+    {
+      "name": "platform-native-campaigns",
+      "status": "staged",
+      "scopes": ["advertiser"],
+      "description": "Operating Smart Plus and GMV Max with their native campaign, material, store, product, authorization, and reporting semantics.",
+      "official_api_areas": ["Smart Plus", "GMV Max"],
+      "required_tools": [
+        "list_smart_plus_campaigns",
+        "get_smart_plus_report",
+        "get_gmv_max_readiness"
+      ]
+    }
+  ]
+}

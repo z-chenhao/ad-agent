@@ -1,0 +1,867 @@
+{
+  "account": {
+    "advertiser_id": "YOUR_ADVERTISER_ID",
+    "advertiser_name": "TikTok Example Lab",
+    "currency": "USD",
+    "timezone": "UTC",
+    "latest_date": "2022-07-17"
+  },
+  "campaigns": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "sandbox_official_shape",
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_1",
+          "campaign_name": "SDK-Campaign",
+          "objective_type": "APP_PROMOTION",
+          "app_promotion_type": "APP_INSTALL",
+          "budget": "50.00",
+          "budget_mode": "BUDGET_MODE_TOTAL",
+          "operation_status": "DISABLE"
+        },
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_2",
+          "campaign_name": "SDK-Campaign · Control",
+          "objective_type": "APP_PROMOTION",
+          "app_promotion_type": "APP_INSTALL",
+          "budget": "50.00",
+          "budget_mode": "BUDGET_MODE_TOTAL",
+          "operation_status": "DISABLE"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_page": 1,
+        "total_number": 2
+      }
+    }
+  },
+  "adgroups": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "sandbox_official_shape",
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_1",
+          "adgroup_id": "adgroup_example_1",
+          "adgroup_name": "App install · Prospecting",
+          "budget": "20.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "DISABLE"
+        },
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_2",
+          "adgroup_id": "adgroup_example_2",
+          "adgroup_name": "App install · Control",
+          "budget": "20.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "DISABLE"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_page": 1,
+        "total_number": 2
+      }
+    }
+  },
+  "ads": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "sandbox_official_shape",
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_1",
+          "adgroup_id": "adgroup_example_1",
+          "ad_id": "ad_example_1",
+          "ad_name": "Product demo",
+          "operation_status": "DISABLE"
+        },
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_1",
+          "adgroup_id": "adgroup_example_1",
+          "ad_id": "ad_example_2",
+          "ad_name": "Customer story",
+          "operation_status": "DISABLE"
+        },
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_2",
+          "adgroup_id": "adgroup_example_2",
+          "ad_id": "ad_example_3",
+          "ad_name": "Control demo",
+          "operation_status": "DISABLE"
+        },
+        {
+          "advertiser_id": "YOUR_ADVERTISER_ID",
+          "campaign_id": "campaign_example_2",
+          "adgroup_id": "adgroup_example_2",
+          "ad_id": "ad_example_4",
+          "ad_name": "Control story",
+          "operation_status": "DISABLE"
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_page": 1,
+        "total_number": 4
+      }
+    }
+  },
+  "report": {
+    "code": 0,
+    "message": "OK",
+    "request_id": "sandbox_official_shape",
+    "data": {
+      "list": [
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-04"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-04"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-04"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-04"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-05"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-05"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-05"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-05"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-06"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-06"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-06"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-06"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-07"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-07"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-07"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-07"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-08"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-08"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-08"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-08"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-09"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-09"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-09"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-09"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-10"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-10"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "3.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-10"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-10"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-11"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-11"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-11"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-11"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-12"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-12"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-12"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-12"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-13"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-13"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-13"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-13"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-14"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-14"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-14"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-14"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-15"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-15"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-15"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-15"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-16"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-16"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-16"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-16"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_1",
+            "stat_time_day": "2022-07-17"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_2",
+            "stat_time_day": "2022-07-17"
+          },
+          "metrics": {
+            "spend": "1.00",
+            "impressions": "1000",
+            "clicks": "20",
+            "conversion": "1",
+            "total_purchase_value": "1.00"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_3",
+            "stat_time_day": "2022-07-17"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        },
+        {
+          "dimensions": {
+            "ad_id": "ad_example_4",
+            "stat_time_day": "2022-07-17"
+          },
+          "metrics": {
+            "spend": "0.50",
+            "impressions": "500",
+            "clicks": "10",
+            "conversion": "1",
+            "total_purchase_value": "1.50"
+          }
+        }
+      ],
+      "page_info": {
+        "page": 1,
+        "page_size": 1000,
+        "total_page": 1,
+        "total_number": 56
+      }
+    }
+  }
+}

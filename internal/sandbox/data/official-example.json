@@ -1,0 +1,22 @@
+{
+  "source": "https://github.com/tiktok/tiktok-business-api-sdk/blob/f809c396520df2d7b201a9ccc5378d822b728ed3/README.md",
+  "campaign_create": {
+    "advertiser_id": "YOUR_ADVERTISER_ID",
+    "campaign_name": "SDK-Campaign",
+    "objective_type": "APP_PROMOTION",
+    "budget": 50,
+    "budget_mode": "BUDGET_MODE_TOTAL",
+    "app_promotion_type": "APP_INSTALL"
+  },
+  "report_request": {
+    "source": "https://www.postman.com/tiktok/tiktok-api-for-business/request/7d5ufux/run-a-synchronous-report",
+    "data_level": "AUCTION_AD",
+    "report_type": "BASIC",
+    "dimensions": ["ad_id", "stat_time_hour"],
+    "metrics": ["clicks"],
+    "page": 1,
+    "page_size": 1,
+    "start_date": "2022-07-17",
+    "end_date": "2022-07-17"
+  }
+}

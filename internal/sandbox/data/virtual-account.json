@@ -1,0 +1,205 @@
+{
+  "account": {
+    "advertiser_id": "adv_aurora_us",
+    "advertiser_name": "Aster & Pine Home",
+    "currency": "USD",
+    "timezone": "America/Los_Angeles",
+    "latest_date": "2026-09-03"
+  },
+  "campaigns": {
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "campaign_name": "US | Home Decor | Prospecting | Purchase",
+          "objective_type": "WEB_CONVERSIONS",
+          "budget": "850.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "campaign_name": "US | Home Decor | Retargeting | Purchase",
+          "objective_type": "WEB_CONVERSIONS",
+          "budget": "300.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_launch_ca",
+          "campaign_name": "CA | Fall Home Edit | Launch",
+          "objective_type": "TRAFFIC",
+          "budget": "12000.00",
+          "budget_mode": "BUDGET_MODE_TOTAL",
+          "operation_status": "DISABLE"
+        }
+      ]
+    }
+  },
+  "adgroups": {
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_broad_us",
+          "adgroup_name": "Broad | US | 18-54 | Purchase",
+          "budget": "340.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_interest_home",
+          "adgroup_name": "Home Decor Interests | US | Purchase",
+          "budget": "240.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_lal_buyers",
+          "adgroup_name": "Purchaser LAL 3% | US | Purchase",
+          "budget": "270.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "adgroup_id": "adgroup_viewers_14d",
+          "adgroup_name": "Video Viewers 14D | Exclude Buyers",
+          "budget": "135.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "adgroup_id": "adgroup_cart_7d",
+          "adgroup_name": "Add to Cart 7D | Exclude Buyers",
+          "budget": "165.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_launch_ca",
+          "adgroup_id": "adgroup_launch_ca",
+          "adgroup_name": "Ontario + BC | Landing Page View",
+          "budget": "420.00",
+          "budget_mode": "BUDGET_MODE_DAY",
+          "operation_status": "DISABLE"
+        }
+      ]
+    }
+  },
+  "ads": {
+    "data": {
+      "list": [
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_broad_us",
+          "ad_id": "ad_prospect_creator",
+          "ad_name": "Room tour | Vintage shelves | Vertical",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_broad_us",
+          "ad_id": "ad_prospect_demo",
+          "ad_name": "Room tour | Warm loft | Landscape",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_interest_home",
+          "ad_id": "ad_interest_room",
+          "ad_name": "Room edit | Warm loft | Still",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_interest_home",
+          "ad_id": "ad_interest_before",
+          "ad_name": "Wall art | Sunlit frames | Still",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_lal_buyers",
+          "ad_id": "ad_lal_unboxing",
+          "ad_name": "Decor edit | Collected shelves | Still",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_prospect_us",
+          "adgroup_id": "adgroup_lal_buyers",
+          "ad_id": "ad_lal_review",
+          "ad_name": "Workspace | Home office | Still",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "adgroup_id": "adgroup_viewers_14d",
+          "ad_id": "ad_viewers_founder",
+          "ad_name": "Workspace | Bright office | Still",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "adgroup_id": "adgroup_viewers_14d",
+          "ad_id": "ad_viewers_offer",
+          "ad_name": "Room edit | Modern living | Viewers",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "adgroup_id": "adgroup_cart_7d",
+          "ad_id": "ad_cart_proof",
+          "ad_name": "Collection reminder | Warm loft | Cart",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_retarget_us",
+          "adgroup_id": "adgroup_cart_7d",
+          "ad_id": "ad_cart_urgency",
+          "ad_name": "Saved selection | Sunlit frames | Cart",
+          "operation_status": "ENABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_launch_ca",
+          "adgroup_id": "adgroup_launch_ca",
+          "ad_id": "ad_launch_teaser",
+          "ad_name": "Fall preview | Home office | Still",
+          "operation_status": "DISABLE"
+        },
+        {
+          "advertiser_id": "adv_aurora_us",
+          "campaign_id": "campaign_launch_ca",
+          "adgroup_id": "adgroup_launch_ca",
+          "ad_id": "ad_launch_collection",
+          "ad_name": "Fall preview | Modern living | Still",
+          "operation_status": "DISABLE"
+        }
+      ]
+    }
+  },
+  "report": { "data": { "list": [] } }
+}

@@ -1,0 +1,281 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  color: #111111;
+  background: #ffffff;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --radius: 0.75rem;
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #666670;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #b91c1c;
+  --border: #e4e4e7;
+  --input: #e4e4e7;
+  --ring: #a1a1aa;
+  --page-title-size: 1.5rem;
+  --section-title-size: 1rem;
+  --metric-value-size: 1.5rem;
+}
+
+* {
+  box-sizing: border-box;
+  border-color: var(--border);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--background);
+  color: var(--foreground);
+  line-height: 1.5;
+  font-size: 0.875rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+textarea {
+  font-family: inherit;
+}
+
+code,
+kbd,
+pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: #18181b;
+  color: #ffffff;
+}
+
+/* One hierarchy across the workspace; the rail changes density, not meaning. */
+.ui-page-title {
+  font-size: var(--page-title-size);
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+.ui-section-title {
+  font-size: var(--section-title-size);
+  line-height: 1.4;
+  font-weight: 600;
+}
+.metric-value {
+  font-size: var(--metric-value-size);
+  line-height: 1.3;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+}
+.metric-value[data-unavailable="true"] {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+.assistant-panel {
+  --section-title-size: 0.875rem;
+  --metric-value-size: 1.125rem;
+}
+/* Radix's intrinsic table wrapper otherwise expands to a long context name. */
+.assistant-panel [data-radix-scroll-area-viewport] > div {
+  display: block !important;
+  min-width: 0;
+  max-width: 100%;
+}
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.metric-grid:not([data-compact="true"]) {
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+}
+.current-context summary::-webkit-details-marker {
+  display: none;
+}
+.current-context[open] summary [title] {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.current-context .context-details {
+  overflow: visible;
+}
+.agent-markdown {
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  line-height: 1.7;
+}
+.agent-markdown > :first-child {
+  margin-top: 0;
+}
+.agent-markdown p,
+.agent-markdown ul,
+.agent-markdown ol,
+.agent-markdown pre,
+.agent-markdown blockquote,
+.agent-markdown table {
+  margin: 0.75rem 0;
+}
+.agent-markdown h1,
+.agent-markdown h2,
+.agent-markdown h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 1rem 0 0.4rem;
+}
+.agent-markdown ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.agent-markdown ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.agent-markdown li + li {
+  margin-top: 0.3rem;
+}
+.agent-markdown a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.agent-markdown pre {
+  padding: 0.75rem;
+  overflow-x: auto;
+  background: var(--muted);
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+}
+.agent-markdown :not(pre) > code {
+  font-size: 0.8125rem;
+  padding: 0.1rem 0.25rem;
+  background: var(--muted);
+  border-radius: 0.25rem;
+}
+.agent-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+}
+.agent-markdown th,
+.agent-markdown td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  font-size: 0.75rem;
+}
+.agent-composer textarea:focus-visible {
+  outline: none;
+}
+.agent-cards {
+  min-width: 0;
+}
+.agent-cards > section > header {
+  padding: 0.875rem 0.875rem 0;
+}
+.agent-cards > section > div {
+  padding-left: 0.875rem;
+  padding-right: 0.875rem;
+}
+.current-context[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.streaming-caret {
+  display: inline-block;
+  width: 0.42rem;
+  height: 0.95rem;
+  margin-left: 0.18rem;
+  vertical-align: -0.12rem;
+  background: currentColor;
+  animation: caret-blink 1s steps(1) infinite;
+}
+
+@keyframes caret-blink {
+  0%,
+  48% {
+    opacity: 1;
+  }
+  49%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

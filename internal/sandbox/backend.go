@@ -1,0 +1,493 @@
+// Package sandbox implements a deterministic, fictional AdBackend for local acceptance.
+package sandbox
+
+import (
+	"context"
+	"crypto/rand"
+	"embed"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/shopspring/decimal"
+	"github.com/z-chenhao/ad-agent/internal/ads"
+)
+
+//go:embed data/*.json
+var files embed.FS
+
+type wireEntity struct {
+	AdvertiserID string           `json:"advertiser_id"`
+	CampaignID   string           `json:"campaign_id"`
+	AdGroupID    string           `json:"adgroup_id"`
+	AdID         string           `json:"ad_id"`
+	CampaignName string           `json:"campaign_name"`
+	AdGroupName  string           `json:"adgroup_name"`
+	AdName       string           `json:"ad_name"`
+	Budget       *decimal.Decimal `json:"budget"`
+	BudgetMode   string           `json:"budget_mode"`
+	Status       string           `json:"operation_status"`
+	Objective    string           `json:"objective_type"`
+}
+type WireRow struct {
+	Dimensions struct {
+		AdID string `json:"ad_id"`
+		Date string `json:"stat_time_day"`
+	} `json:"dimensions"`
+	Metrics struct {
+		Spend       decimal.Decimal  `json:"spend"`
+		Impressions int64            `json:"impressions,string"`
+		Clicks      int64            `json:"clicks,string"`
+		Conversions *decimal.Decimal `json:"conversion"`
+		Revenue     *decimal.Decimal `json:"total_purchase_value"`
+	} `json:"metrics"`
+}
+type envelope[T any] struct {
+	Data struct {
+		List []T `json:"list"`
+	} `json:"data"`
+}
+type Document struct {
+	Account struct {
+		ID       string `json:"advertiser_id"`
+		Name     string `json:"advertiser_name"`
+		Currency string `json:"currency"`
+		Timezone string `json:"timezone"`
+		Latest   string `json:"latest_date"`
+	} `json:"account"`
+	Campaigns envelope[wireEntity] `json:"campaigns"`
+	AdGroups  envelope[wireEntity] `json:"adgroups"`
+	Ads       envelope[wireEntity] `json:"ads"`
+	Report    envelope[WireRow]    `json:"report"`
+}
+type Backend struct {
+	budgetPolicy    *ads.Policy
+	mu              sync.RWMutex
+	environment     string
+	account         ads.Account
+	entities        map[string]ads.Entity
+	rows            []ads.Row
+	clock           time.Time
+	hourFacts       []HourFact
+	location        *time.Location
+	seedStart       string
+	seedEnd         string
+	simulationStart time.Time
+	operations      OperationState
+	model           SimulationModelState
+}
+
+func New() (*Backend, error) {
+	return NewEnvironment("default")
+}
+
+func NewEnvironment(environment string) (*Backend, error) {
+	if !ValidEnvironment(environment) {
+		return nil, fmt.Errorf("invalid sandbox environment %q", environment)
+	}
+	b, err := files.ReadFile("data/virtual-account.json")
+	if err != nil {
+		return nil, err
+	}
+	backend, err := fromJSON(b, environment)
+	if err != nil {
+		return nil, err
+	}
+	return backend, nil
+}
+
+// NewAccountEnvironment creates another advertiser inside a manager sandbox.
+// The underlying request-shaped seed stays the same, while identity and storage
+// scope are distinct. This is environment composition, not a failure scenario.
+func NewAccountEnvironment(environment, accountID, accountName string) (*Backend, error) {
+	if !ValidEnvironment(accountID) || accountName == "" || len(accountName) > 128 {
+		return nil, errors.New("invalid sandbox account profile")
+	}
+	b, err := NewEnvironment(environment)
+	if err != nil {
+		return nil, err
+	}
+	b.account.ID = accountID
+	b.account.Name = accountName
+	b.account.Source.AccountID = accountID
+	for id, entity := range b.entities {
+		entity.AccountID = accountID
+		b.entities[id] = entity
+	}
+	b.operations = defaultOperationState(b.account, b.clock)
+	if len(b.rows) == len(deliveryProfiles)*28 {
+		b.model = newSimulationModel(DefaultSimulationConfig())
+		b.rows, err = b.historicalSeed(28)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return b, nil
+}
+func FromJSON(b []byte) (*Backend, error) {
+	return fromJSON(b, "default")
+}
+
+func fromJSON(b []byte, environment string) (*Backend, error) {
+	var d Document
+	if err := json.Unmarshal(b, &d); err != nil {
+		return nil, err
+	}
+	if d.Account.ID == "" || len(d.Account.Currency) != 3 {
+		return nil, errors.New("invalid account metadata")
+	}
+	if _, err := time.LoadLocation(d.Account.Timezone); err != nil {
+		return nil, errors.New("invalid account timezone")
+	}
+	source := ads.Source{Backend: "sandbox", Environment: environment, AccountID: d.Account.ID}
+	location, _ := time.LoadLocation(d.Account.Timezone)
+	latest, _ := time.ParseInLocation(time.DateOnly, d.Account.Latest, location)
+	clock := latest.Add(23 * time.Hour).UTC()
+	// Source identifies simulated data. Limitations are reserved for evidence gaps,
+	// not simulator documentation repeated through every account/report/card.
+	f := &Backend{environment: environment, account: ads.Account{ID: d.Account.ID, Name: d.Account.Name, Currency: d.Account.Currency, Timezone: d.Account.Timezone, LatestDate: d.Account.Latest, Source: source, Limitations: []string{}}, entities: map[string]ads.Entity{}, clock: clock, hourFacts: []HourFact{}, location: location, simulationStart: clock, model: newSimulationModel(DefaultSimulationConfig())}
+	f.operations = defaultOperationState(f.account, clock)
+	for _, group := range []struct {
+		level ads.Level
+		items []wireEntity
+	}{{ads.Campaign, d.Campaigns.Data.List}, {ads.AdGroup, d.AdGroups.Data.List}, {ads.Ad, d.Ads.Data.List}} {
+		for _, w := range group.items {
+			e := ads.Entity{AccountID: w.AdvertiserID, Level: group.level, Status: w.Status, Budget: w.Budget, BudgetMode: w.BudgetMode, Objective: w.Objective}
+			switch group.level {
+			case ads.Campaign:
+				e.ID = w.CampaignID
+				e.Name = w.CampaignName
+			case ads.AdGroup:
+				e.ID = w.AdGroupID
+				e.Name = w.AdGroupName
+				e.ParentID = w.CampaignID
+			case ads.Ad:
+				e.ID = w.AdID
+				e.Name = w.AdName
+				e.ParentID = w.AdGroupID
+			}
+			if err := ads.CheckEntity(e, f.account.ID); err != nil {
+				return nil, err
+			}
+			if _, ok := f.entities[e.ID]; ok {
+				return nil, errors.New("duplicate entity ID")
+			}
+			f.entities[e.ID] = e
+		}
+	}
+	for _, e := range f.entities {
+		if e.Level != ads.Campaign {
+			p, ok := f.entities[e.ParentID]
+			if !ok || (e.Level == ads.Ad && p.Level != ads.AdGroup) || (e.Level == ads.AdGroup && p.Level != ads.Campaign) {
+				return nil, errors.New("broken entity hierarchy")
+			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, w := range d.Report.Data.List {
+		e, ok := f.entities[w.Dimensions.AdID]
+		if !ok || e.Level != ads.Ad {
+			return nil, errors.New("report references unknown ad")
+		}
+		if _, err := time.Parse(time.DateOnly, w.Dimensions.Date); err != nil {
+			return nil, err
+		}
+		key := e.ID + "/" + w.Dimensions.Date
+		if seen[key] {
+			return nil, errors.New("duplicate ad/day")
+		}
+		seen[key] = true
+		m := ads.Metrics{Spend: w.Metrics.Spend, Impressions: w.Metrics.Impressions, Clicks: w.Metrics.Clicks, Conversions: w.Metrics.Conversions, Revenue: w.Metrics.Revenue}
+		reach := int64(float64(m.Impressions) * 0.72)
+		landing := int64(float64(m.Clicks) * 0.78)
+		view2 := int64(float64(m.Impressions) * 0.61)
+		view6 := int64(float64(m.Impressions) * 0.34)
+		complete := int64(float64(m.Impressions) * 0.12)
+		m.Reach, m.LandingPageViews, m.VideoViews2s, m.VideoViews6s, m.VideoViewsComplete = &reach, &landing, &view2, &view6, &complete
+		if m.Spend.IsNegative() || m.Impressions < 0 || m.Clicks < 0 || m.Clicks > m.Impressions || m.Conversions != nil && m.Conversions.IsNegative() || m.Revenue != nil && m.Revenue.IsNegative() {
+			return nil, errors.New("inconsistent metrics")
+		}
+		f.rows = append(f.rows, ads.Row{EntityID: e.ID, Date: w.Dimensions.Date, Metrics: m})
+	}
+	if len(f.rows) == 0 {
+		rows, seedErr := f.historicalSeed(28)
+		if seedErr != nil {
+			return nil, seedErr
+		}
+		f.rows = rows
+	}
+	for _, row := range f.rows {
+		if f.seedStart == "" || row.Date < f.seedStart {
+			f.seedStart = row.Date
+		}
+		if row.Date > f.seedEnd {
+			f.seedEnd = row.Date
+		}
+	}
+	if f.seedEnd == "" {
+		f.seedStart, f.seedEnd = d.Account.Latest, d.Account.Latest
+	}
+	return f, nil
+}
+func (f *Backend) Account(ctx context.Context) (ads.Account, error) {
+	if err := ctx.Err(); err != nil {
+		return ads.Account{}, err
+	}
+	return f.account, nil
+}
+func (f *Backend) List(ctx context.Context, q ads.EntityQuery) ([]ads.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if !q.Level.Valid() || q.Level == ads.Advertiser {
+		return nil, errors.New("invalid entity level")
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	out := []ads.Entity{}
+	for _, e := range f.entities {
+		if e.Level == q.Level && (q.ParentID == "" || e.ParentID == q.ParentID) {
+			out = append(out, e)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
+}
+func (f *Backend) Get(ctx context.Context, l ads.Level, id string) (ads.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return ads.Entity{}, err
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	e, ok := f.entities[id]
+	if !ok || e.Level != l {
+		return ads.Entity{}, ads.ErrNotFound
+	}
+	return e, nil
+}
+func (f *Backend) Report(ctx context.Context, q ads.ReportQuery) (ads.Report, error) {
+	if err := q.Validate(); err != nil {
+		return ads.Report{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return ads.Report{}, err
+	}
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	r := ads.Report{Source: f.account.Source, Query: q, Currency: f.account.Currency, Timezone: f.account.Timezone, Attribution: "Click-through and view-through attribution", FetchedAt: time.Now().UTC(), Complete: q.Start >= f.seedStart && q.End <= f.account.LatestDate, Limitations: append([]string{}, f.account.Limitations...), Rows: []ads.Row{}, Totals: ads.ZeroMetrics()}
+	if !r.Complete {
+		r.Limitations = append(r.Limitations, "The requested dates extend beyond available data coverage.")
+	}
+	if q.EntityID != "" && q.Level != ads.Advertiser {
+		e, ok := f.entities[q.EntityID]
+		if !ok || e.Level != q.Level {
+			return ads.Report{}, ads.ErrNotFound
+		}
+	}
+	if q.Level == ads.Advertiser && q.EntityID != "" && q.EntityID != f.account.ID {
+		return ads.Report{}, ads.ErrNotFound
+	}
+	coverage := map[string]bool{}
+	for _, row := range f.rows {
+		if row.Date <= f.seedEnd {
+			coverage[row.EntityID+"/"+row.Date] = true
+		}
+	}
+	hourCoverage := map[string]int{}
+	for _, fact := range f.hourFacts {
+		day := fact.Hour.In(f.location).Format(time.DateOnly)
+		hourCoverage[fact.AdID+"/"+day]++
+		if hourCoverage[fact.AdID+"/"+day] == 24 {
+			coverage[fact.AdID+"/"+day] = true
+		}
+	}
+	start, _ := time.Parse(time.DateOnly, q.Start)
+	end, _ := time.Parse(time.DateOnly, q.End)
+	for _, entity := range f.entities {
+		if entity.Level != ads.Ad {
+			continue
+		}
+		e := entity
+		for e.Level != q.Level && q.Level != ads.Advertiser {
+			e = f.entities[e.ParentID]
+		}
+		if q.EntityID != "" && q.Level != ads.Advertiser && e.ID != q.EntityID {
+			continue
+		}
+		for day := start; !day.After(end); day = day.AddDate(0, 0, 1) {
+			if !coverage[entity.ID+"/"+day.Format(time.DateOnly)] {
+				r.Complete = false
+			}
+		}
+	}
+	if !r.Complete {
+		r.Limitations = append(r.Limitations, "Ad or date coverage is missing; absent rows are not confirmed zero values.")
+	}
+	reportRows := append([]ads.Row{}, f.rows...)
+	backfillPending := false
+	for _, fact := range f.hourFacts {
+		day := fact.Hour.In(f.location).Format(time.DateOnly)
+		if day < q.Start || day > q.End {
+			continue
+		}
+		if fact.ModelVersion != "" && f.clock.Before(fact.ReportAvailableAt) && fact.Metrics.Conversions != nil && !fact.Metrics.Conversions.IsZero() {
+			backfillPending = true
+		}
+		reportRows = append(reportRows, ads.Row{EntityID: fact.AdID, Date: day, Metrics: f.visibleFactMetrics(fact)})
+	}
+	if backfillPending {
+		r.Limitations = append(r.Limitations, "Recent conversions are still being attributed and may backfill.")
+	}
+	groups := map[string]ads.Row{}
+	for _, row := range reportRows {
+		if row.Date < q.Start || row.Date > q.End {
+			continue
+		}
+		e := f.entities[row.EntityID]
+		for e.Level != q.Level && q.Level != ads.Advertiser {
+			if e.ParentID == "" {
+				return ads.Report{}, fmt.Errorf("cannot aggregate level %s", q.Level)
+			}
+			e = f.entities[e.ParentID]
+		}
+		id := e.ID
+		if q.Level == ads.Advertiser {
+			id = f.account.ID
+		}
+		if q.EntityID != "" && q.EntityID != id {
+			continue
+		}
+		key := id + "/" + row.Date
+		v, ok := groups[key]
+		if !ok {
+			v = ads.Row{EntityID: id, Date: row.Date, Metrics: ads.ZeroMetrics()}
+		}
+		v.Metrics = v.Metrics.Add(row.Metrics)
+		groups[key] = v
+	}
+	keys := make([]string, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		row := groups[k]
+		row.Metrics.Reach = f.reportReach(q.Level, row.EntityID, row.Date, row.Date)
+		groups[k] = row
+		r.Rows = append(r.Rows, groups[k])
+		r.Totals = r.Totals.Add(groups[k].Metrics)
+	}
+	r.Totals.Reach = f.reportReach(q.Level, q.EntityID, q.Start, q.End)
+	return r, nil
+}
+
+// Restore loads a persisted sandbox entity. Existing identities may change only
+// mutable fields; newly-created identities must preserve a valid hierarchy.
+func (f *Backend) Restore(e ads.Entity) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	old, ok := f.entities[e.ID]
+	if err := ads.CheckEntity(e, f.account.ID); err != nil {
+		return err
+	}
+	if !ok {
+		if err := f.validateNew(e); err != nil {
+			return err
+		}
+		f.entities[e.ID] = e
+		return nil
+	}
+	expected := old
+	expected.Budget = e.Budget
+	expected.Status = e.Status
+	if expected.Version() != e.Version() {
+		return errors.New("invalid sandbox override")
+	}
+	f.entities[e.ID] = e
+	return nil
+}
+func (f *Backend) Write(ctx context.Context, w ads.WriteRequest) ads.WriteOutcome {
+	if ctx.Err() != nil {
+		return ads.WriteOutcome{State: "not_sent", Message: "cancelled"}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	e, ok := f.entities[w.Target.ID]
+	if !ok || e.Version() != w.Target.Version() {
+		return ads.WriteOutcome{State: "rejected", Message: "target changed"}
+	}
+	updated := e
+	switch w.Kind {
+	case "budget":
+		if w.Budget == nil || e.Level == ads.Ad || w.Budget.IsNegative() {
+			return ads.WriteOutcome{State: "rejected", Message: "invalid budget"}
+		}
+		v := *w.Budget
+		updated.Budget = &v
+	case "status":
+		if w.Status != "ENABLE" && w.Status != "DISABLE" {
+			return ads.WriteOutcome{State: "rejected", Message: "invalid status"}
+		}
+		updated.Status = w.Status
+	default:
+		return ads.WriteOutcome{State: "rejected", Message: "unsupported change"}
+	}
+	f.entities[e.ID] = updated
+	return ads.WriteOutcome{State: "acknowledged", RequestID: "sandbox-write"}
+}
+
+func ValidEnvironment(value string) bool {
+	if len(value) < 1 || len(value) > 64 {
+		return false
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+func (f *Backend) validateNew(entity ads.Entity) error {
+	if entity.Level == ads.Campaign {
+		if entity.ParentID != "" {
+			return errors.New("campaign cannot have a parent")
+		}
+		return nil
+	}
+	parent, ok := f.entities[entity.ParentID]
+	if !ok || entity.Level == ads.AdGroup && parent.Level != ads.Campaign || entity.Level == ads.Ad && parent.Level != ads.AdGroup {
+		return errors.New("invalid sandbox parent")
+	}
+	return nil
+}
+
+// Create adds a new object to this isolated fictional environment. The host
+// exposes it only through the staged-change approval path.
+func (f *Backend) Create(ctx context.Context, request ads.CreateRequest) (ads.Entity, error) {
+	if err := ctx.Err(); err != nil {
+		return ads.Entity{}, err
+	}
+	if err := request.Validate(); err != nil {
+		return ads.Entity{}, err
+	}
+	var random [16]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return ads.Entity{}, err
+	}
+	entity := ads.Entity{ID: string(request.Level) + "_sandbox_" + hex.EncodeToString(random[:]), AccountID: f.account.ID, Level: request.Level, ParentID: request.ParentID, Name: request.Name, Status: request.Status, Budget: request.Budget, BudgetMode: request.BudgetMode, Objective: request.Objective}
+	if err := ads.CheckEntity(entity, f.account.ID); err != nil {
+		return ads.Entity{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.validateNew(entity); err != nil {
+		return ads.Entity{}, err
+	}
+	f.entities[entity.ID] = entity
+	return entity, nil
+}

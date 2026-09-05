@@ -1,0 +1,623 @@
+package agenthost
+
+import (
+	"context"
+	"encoding/json"
+	"github.com/shopspring/decimal"
+	"github.com/z-chenhao/ad-agent/internal/ads"
+	"github.com/z-chenhao/ad-agent/internal/prompting"
+	ar "github.com/z-chenhao/ad-agent/internal/runtime"
+	"github.com/z-chenhao/ad-agent/internal/sandbox"
+	"github.com/z-chenhao/ad-agent/internal/store"
+	"os"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+type fakeRuntime func(context.Context, ar.Request, ar.Hooks) (ar.Result, error)
+
+func (f fakeRuntime) Run(c context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
+	return f(c, r, h)
+}
+func testHost(t *testing.T, r ar.Runtime) (*Host, *sandbox.Backend) {
+	t.Helper()
+	dir := t.TempDir()
+	os.Chmod(dir, 0700)
+	s, e := store.Open(dir)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Cleanup(func() { s.Close() })
+	b, e := sandbox.New()
+	if e != nil {
+		t.Fatal(e)
+	}
+	h, e := New(b, r, s, Changes{Backend: b, Writer: b, Store: s, Policy: ads.SandboxPolicy()})
+	if e != nil {
+		t.Fatal(e)
+	}
+	h.AutomaticMemoryCapture = false
+	return h, b
+}
+func call(name, args string) ar.Call {
+	return ar.Call{ID: store.ID("call"), Name: name, Arguments: json.RawMessage(args), Round: 1}
+}
+
+func TestSessionKeepsDefaultUnlessModelIsExplicitlyChanged(t *testing.T) {
+	selected := ar.ModelSelection{Provider: ar.CodexProvider, Model: "gpt-5.4-mini", Reasoning: "medium", AuthMode: ar.ChatGPTOAuth}
+	seen := []ar.ModelSelection{}
+	model := fakeRuntime(func(_ context.Context, request ar.Request, _ ar.Hooks) (ar.Result, error) {
+		seen = append(seen, request.Model)
+		return ar.Result{Stop: "stop", Text: "ok"}, nil
+	})
+	h, _ := testHost(t, model)
+	if _, err := h.RunWithModel(context.Background(), "model-session", "first", selected, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Run(context.Background(), "model-session", "second", nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen) != 2 || seen[0] != selected || seen[1] != selected {
+		t.Fatalf("runtime models=%#v", seen)
+	}
+	if _, err := h.RunWithModel(context.Background(), "model-session", "third", ar.DefaultModelSelection(), nil); err != nil {
+		t.Fatal(err)
+	}
+	account, _ := h.Backend.Account(context.Background())
+	session, err := h.Store.Session(context.Background(), "model-session", account.Source)
+	if err != nil || session.Model != ar.DefaultModelSelection() || len(session.Messages) != 6 {
+		t.Fatalf("session model=%#v err=%v", session.Model, err)
+	}
+}
+
+func TestViewContextIsBoundedPromptContextNotStoredUserText(t *testing.T) {
+	var prompt string
+	model := fakeRuntime(func(_ context.Context, request ar.Request, _ ar.Hooks) (ar.Result, error) {
+		prompt = request.Prompt
+		return ar.Result{Stop: "stop", Text: "ok"}, nil
+	})
+	host, _ := testHost(t, model)
+	account, err := host.Backend.Account(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	view := ViewContext{
+		Page:         "campaigns",
+		AccountID:    account.ID,
+		AccountName:  account.Name,
+		EntityLevel:  "campaign",
+		EntityID:     "campaign_prospect_us",
+		EntityName:   "Prospecting",
+		StartDate:    "2026-08-28",
+		EndDate:      "2026-09-03",
+		CompareStart: "2026-08-21",
+		CompareEnd:   "2026-08-27",
+	}
+	const message = "Diagnose this campaign"
+	if _, err = host.RunWithModelAndView(context.Background(), "view-context", message, ar.ModelSelection{}, view, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"<view_context>", `"entity_id":"campaign_prospect_us"`, "navigation hint only"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("compiled prompt missing %q: %s", want, prompt)
+		}
+	}
+	session, err := host.Store.Session(context.Background(), "view-context", account.Source)
+	if err != nil || len(session.Messages) < 1 || session.Messages[0].Text != message {
+		t.Fatalf("stored user text was altered: %#v err=%v", session.Messages, err)
+	}
+}
+
+func TestViewContextCannotChangeDirectAdvertiserScope(t *testing.T) {
+	host, _ := testHost(t, fakeRuntime(func(_ context.Context, _ ar.Request, _ ar.Hooks) (ar.Result, error) {
+		t.Fatal("runtime must not start for an account mismatch")
+		return ar.Result{}, nil
+	}))
+	_, err := host.RunWithModelAndView(context.Background(), "view-mismatch", "Inspect this account", ar.ModelSelection{}, ViewContext{Page: "campaigns", AccountID: "outside"}, nil)
+	if err == nil || err.Error() != "view_account_mismatch" {
+		t.Fatalf("scope mismatch err=%v", err)
+	}
+}
+
+func TestHostIsolationAndEvents(t *testing.T) {
+	model := fakeRuntime(func(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
+		if r.MaxRounds != 0 {
+			t.Fatalf("main agent round limit = %d, want 0", r.MaxRounds)
+		}
+		for _, tool := range r.Tools {
+			if tool.Name == "apply_change" || tool.Name == "bash" {
+				t.Fatal("unsafe tool")
+			}
+		}
+		for _, c := range []ar.Call{call("apply_change", `{}`), call("get_entity", `{"level":"campaign","id":"campaign_prospect_us","advertiser_id":"other"}`), call("stage_status_change", `{"level":"campaign","id":"campaign_prospect_us","status":"ENABLE","reason":"test"}`)} {
+			if h.Execute(ctx, c).OK {
+				t.Fatal("gate bypass", c.Name)
+			}
+		}
+		if !h.Execute(ctx, call("get_entity", `{"level":"campaign","id":"campaign_prospect_us"}`)).OK {
+			t.Fatal("read failed")
+		}
+		staged := h.Execute(ctx, call("stage_budget_change", `{"level":"campaign","id":"campaign_prospect_us","budget":"860","currency":"USD","reason":"operator request"}`))
+		if !staged.OK {
+			t.Fatal("stage failed")
+		}
+		var change ads.Change
+		if json.Unmarshal(staged.Data, &change) != nil {
+			t.Fatal("invalid staged change")
+		}
+		preview := h.Execute(ctx, call("present_change_preview", `{"change_id":"`+change.ID+`"}`))
+		if !preview.OK {
+			t.Fatal("redundant preview must return the existing card")
+		}
+		h.Emit(ar.Event{Type: "text.delta", Text: "Draft awaiting approval"})
+		return ar.Result{Stop: "stop", Text: "Draft awaiting approval"}, nil
+	})
+	h, b := testHost(t, model)
+	result, err := h.Run(context.Background(), "test", "Change the budget to 860", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entity, _ := b.Get(context.Background(), ads.Campaign, "campaign_prospect_us")
+	if entity.Budget.String() != "850" {
+		t.Fatal("model changed backend")
+	}
+	changes, _ := h.Store.Changes(context.Background(), "test")
+	if len(changes) != 1 || changes[0].State != ads.Staged {
+		t.Fatal("missing draft")
+	}
+	if len(result.Cards) != 1 || result.Cards[0].Change == nil || result.Cards[0].Change.ID != changes[0].ID {
+		t.Fatalf("stage did not automatically render one exact preview: %#v", result.Cards)
+	}
+	events, e := h.Store.Events(context.Background(), result.TurnID, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for i, event := range events {
+		if event.Seq != int64(i+1) {
+			t.Fatal("nonmonotonic sequence")
+		}
+	}
+	if events[len(events)-1].Type != "turn.completed" {
+		t.Fatal("no terminal")
+	}
+}
+func TestConcurrentApprovalAndDrift(t *testing.T) {
+	h, b := testHost(t, nil)
+	ctx := context.Background()
+	a, _ := b.Account(ctx)
+	before, _ := b.Get(ctx, ads.Campaign, "campaign_prospect_us")
+	after := before
+	budget := decimal.NewFromInt(860)
+	after.Budget = &budget
+	session := store.Session{ID: "s", Source: a.Source, Provenance: map[string]store.Seen{before.ID: {Entity: before, At: time.Now()}}}
+	c, e := h.Changes.Stage(ctx, session, before, after, ads.BudgetChange, "test")
+	if e != nil {
+		t.Fatal(e)
+	}
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	success := 0
+	for i := 0; i < 12; i++ {
+		wg.Go(func() {
+			v, e := h.Changes.Apply(ctx, "s", c.ID, "operator")
+			if e == nil && v.State == ads.Applied {
+				mu.Lock()
+				success++
+				mu.Unlock()
+			}
+		})
+	}
+	wg.Wait()
+	if success != 1 {
+		t.Fatalf("execution count %d", success)
+	}
+	record, _ := h.Store.Change(ctx, c.ID)
+	if record.AttemptID == "" || record.ApprovedBy != "operator" {
+		t.Fatal("missing approval audit")
+	}
+	before, _ = b.Get(ctx, ads.Campaign, before.ID)
+	session.Provenance[before.ID] = store.Seen{Entity: before, At: time.Now()}
+	after = before
+	after.Status = "DISABLE"
+	c, e = h.Changes.Stage(ctx, session, before, after, ads.StatusChange, "test")
+	if e != nil {
+		t.Fatal(e)
+	}
+	v := decimal.NewFromInt(861)
+	b.Write(ctx, ads.WriteRequest{Target: before, Kind: "budget", Budget: &v})
+	c, e = h.Changes.Apply(ctx, "s", c.ID, "operator")
+	if e != nil || c.State != ads.Expired {
+		t.Fatal("drift not rejected", e, c.State)
+	}
+}
+
+type unknownWriter struct{}
+
+func (unknownWriter) Write(context.Context, ads.WriteRequest) ads.WriteOutcome {
+	return ads.WriteOutcome{State: "unknown", Message: "response lost"}
+}
+func TestUnknownWriteNeverRetries(t *testing.T) {
+	h, b := testHost(t, nil)
+	h.Changes.Writer = unknownWriter{}
+	ctx := context.Background()
+	a, _ := b.Account(ctx)
+	before, _ := b.Get(ctx, ads.Campaign, "campaign_prospect_us")
+	after := before
+	after.Status = "DISABLE"
+	s := store.Session{ID: "s", Source: a.Source, Provenance: map[string]store.Seen{before.ID: {Entity: before, At: time.Now()}}}
+	c, e := h.Changes.Stage(ctx, s, before, after, ads.StatusChange, "test")
+	if e != nil {
+		t.Fatal(e)
+	}
+	c, e = h.Changes.Apply(ctx, "s", c.ID, "operator")
+	if e != nil || c.State != ads.Indeterminate {
+		t.Fatal("unknown is not indeterminate", e)
+	}
+	if _, e = h.Changes.Apply(ctx, "s", c.ID, "operator"); e == nil {
+		t.Fatal("unknown write retried")
+	}
+}
+func TestAnalysisDoesNotGrantProvenance(t *testing.T) {
+	var parent bool
+	childStarted, childFinished := 0, 0
+	model := fakeRuntime(func(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
+		if !parent {
+			parent = true
+			result := h.Execute(ctx, call("get_performance_report", `{"level":"campaign","start_date":"2026-08-28","end_date":"2026-09-03"}`))
+			var report ads.Report
+			json.Unmarshal(result.Data, &report)
+			args, _ := json.Marshal(struct {
+				Question string   `json:"question"`
+				Refs     []string `json:"dataset_refs"`
+			}{"rank", []string{report.ID}})
+			result = h.Execute(ctx, ar.Call{ID: "analysis", Name: "run_analysis", Arguments: args})
+			if !result.OK {
+				t.Fatal(result.Error)
+			}
+			if h.Execute(ctx, call("stage_status_change", `{"level":"campaign","id":"campaign_prospect_us","status":"ENABLE","reason":"analysis suggested"}`)).OK {
+				t.Fatal("child granted provenance")
+			}
+		} else {
+			for _, tool := range r.Tools {
+				if tool.Name == "get_entity" || tool.Name == "stage_budget_change" || tool.Name == "run_analysis" {
+					t.Fatal("child authority leak")
+				}
+			}
+			ref := r.Prompt[len(r.Prompt)-39:] // report_ plus 32 hex bytes, supplied only as a server handle.
+			args, _ := json.Marshal(struct {
+				Ref       string `json:"dataset_ref"`
+				Operation string `json:"operation"`
+			}{ref, "rank"})
+			result := h.Execute(ctx, ar.Call{ID: "calculate", Name: "analysis_calculate", Arguments: args})
+			if !result.OK {
+				t.Fatal(result.Error)
+			}
+			var calc ads.Calculation
+			json.Unmarshal(result.Data, &calc)
+			invalid := `{"summary":"sandbox","findings":[{"evidence_id":"` + calc.ID + `","entity_id":"campaign_unknown","observation":"invalid"}],"counter_evidence":["control stable"],"limitations":["synthetic"],"method":"weighted ratio"}`
+			rejected := h.Execute(ctx, call("submit_analysis", invalid))
+			if rejected.OK || !strings.Contains(rejected.Error, "omit entity_id") || !strings.Contains(rejected.Error, "campaign_prospect_us") {
+				t.Fatalf("analysis validation was not recoverable: %#v", rejected)
+			}
+			payload := `{"summary":"sandbox","findings":[{"evidence_id":"` + calc.ID + `","entity_id":"campaign_prospect_us","observation":"lower ROAS"}],"counter_evidence":["control stable"],"limitations":["synthetic"],"method":"weighted ratio"}`
+			if !h.Execute(ctx, call("submit_analysis", payload)).OK {
+				t.Fatal("submit failed")
+			}
+		}
+		return ar.Result{Stop: "stop", Text: "done"}, nil
+	})
+	h, _ := testHost(t, model)
+	if _, e := h.Run(context.Background(), "test", "diagnose", func(event store.Event) {
+		if event.Type != "tool.started" && event.Type != "tool.finished" {
+			return
+		}
+		var data struct {
+			Role     string `json:"role"`
+			ParentID string `json:"parent_id"`
+		}
+		if err := json.Unmarshal(event.Data, &data); err != nil {
+			t.Fatal(err)
+		}
+		if data.Role != "analysis" {
+			return
+		}
+		if data.ParentID != "analysis" {
+			t.Fatalf("missing child correlation: %s", event.Data)
+		}
+		if event.Type == "tool.started" {
+			childStarted++
+		} else {
+			childFinished++
+		}
+	}); e != nil {
+		t.Fatal(e)
+	}
+	if childStarted != 3 || childFinished != childStarted {
+		t.Fatalf("child events: %d/%d", childStarted, childFinished)
+	}
+}
+
+func TestExplicitMemoryLifecycleAndInjection(t *testing.T) {
+	runs := 0
+	var savedID string
+	model := fakeRuntime(func(ctx context.Context, r ar.Request, h ar.Hooks) (ar.Result, error) {
+		runs++
+		if runs == 1 {
+			result := h.Execute(ctx, call("save_memory", `{"kind":"constraint","text":"Limit each budget change to 10%"}`))
+			if !result.OK {
+				t.Fatal(result.Error)
+			}
+			var memory store.Memory
+			if err := json.Unmarshal(result.Data, &memory); err != nil {
+				t.Fatal(err)
+			}
+			savedID = memory.ID
+			if result = h.Execute(ctx, call("recall_memory", `{}`)); !result.OK || !strings.Contains(string(result.Data), savedID) {
+				t.Fatal("saved memory not recalled", result.Error)
+			}
+		} else {
+			if !strings.Contains(r.Prompt, "Limit each budget change to 10%") || !strings.Contains(r.Prompt, "<saved_facts>") {
+				t.Fatal("memory not fenced into the next turn")
+			}
+			result := h.Execute(ctx, call("delete_memory", `{"memory_id":"`+savedID+`"}`))
+			if !result.OK {
+				t.Fatal(result.Error)
+			}
+		}
+		return ar.Result{Stop: "stop", Text: "done"}, nil
+	})
+	h, _ := testHost(t, model)
+	if _, err := h.Run(context.Background(), "memory-test", "Remember this constraint", nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Run(context.Background(), "memory-test", "Delete that constraint", nil); err != nil {
+		t.Fatal(err)
+	}
+	memories, err := h.Store.Memories(context.Background(), ads.Source{Backend: "sandbox", Environment: "baseline", AccountID: "advertiser_example_1"}, 50)
+	if err != nil || len(memories) != 0 {
+		t.Fatalf("memory still present: %#v %v", memories, err)
+	}
+}
+
+func TestMemoryRejectsCredentialAndObjectFacts(t *testing.T) {
+	for _, text := range []string{
+		"App Secret is secret-value",
+		"remember access_token abc",
+		"advertiser_id is 123",
+		"account number 1234567890123456789",
+		"sk-" + "abcdefghijklmnopqrstuvwxyz",
+	} {
+		if !unsafeMemoryText(text) {
+			t.Fatalf("unsafe memory accepted: %q", text)
+		}
+	}
+	for _, text := range []string{
+		"Limit each budget change to 10%",
+		"Prioritize conversion-cost optimization",
+		"Review last week every Monday",
+	} {
+		if unsafeMemoryText(text) {
+			t.Fatalf("safe memory rejected: %q", text)
+		}
+	}
+}
+
+func TestHarnessForcesPerformanceGroundingAndDeduplicatesPartialCards(t *testing.T) {
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		if !strings.Contains(request.Prompt, "<host_grounding>") || !strings.Contains(request.Prompt, `"tool":"get_performance_report"`) || !strings.Contains(request.Prompt, "report_") {
+			t.Fatalf("required performance grounding missing from prompt: %s", request.Prompt)
+		}
+		hooks.Emit(ar.Event{Type: "tool.delta", ID: "presentation-1", Name: "present_metrics"})
+		hooks.Emit(ar.Event{Type: "tool.delta", ID: "presentation-1", Name: "present_metrics"})
+		return ar.Result{Stop: "stop", Text: "grounded", Checkpoint: `{"id":"checkpoint"}`}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "grounding-test", "Compare campaign performance for the latest seven days", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := host.Store.Events(context.Background(), result.TurnID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	partials := 0
+	forcedReads := 0
+	for _, event := range events {
+		if event.Type == "ui.partial" {
+			partials++
+		}
+		if event.Type == "tool.started" && strings.Contains(string(event.Data), "get_performance_report") {
+			forcedReads++
+		}
+	}
+	if partials != 1 {
+		t.Fatalf("partial presentation events = %d, want 1", partials)
+	}
+	if forcedReads != 1 {
+		t.Fatalf("forced grounding reads = %d, want 1", forcedReads)
+	}
+}
+
+func TestHarnessFollowsThroughOnRequestedChange(t *testing.T) {
+	runs := 0
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		runs++
+		if runs == 1 {
+			return ar.Result{Stop: "stop", Text: "I recommend changing it.", Checkpoint: `{"id":"first"}`}, nil
+		}
+		if !strings.Contains(request.Checkpoint, "first") {
+			t.Fatal("follow-through did not resume the first runtime checkpoint")
+		}
+		if request.Prompt != stagingFollowThroughReminder {
+			t.Fatalf("unexpected follow-through prompt: %s", request.Prompt)
+		}
+		if result := hooks.Execute(ctx, call("get_entity", `{"level":"campaign","id":"campaign_prospect_us"}`)); !result.OK {
+			t.Fatal(result.Error)
+		}
+		result := hooks.Execute(ctx, call("stage_budget_change", `{"level":"campaign","id":"campaign_prospect_us","budget":"860","currency":"USD","reason":"operator requested 860 USD"}`))
+		if !result.OK {
+			t.Fatal(result.Error)
+		}
+		return ar.Result{Stop: "stop", Text: "Draft staged.", Checkpoint: `{"id":"second"}`}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "follow-through", "Change campaign_prospect_us budget to 860 USD", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runs != 2 || !strings.Contains(result.Text, "Draft staged") {
+		t.Fatalf("follow-through result = %#v, runs = %d", result, runs)
+	}
+	changes, err := host.Store.Changes(context.Background(), "follow-through")
+	if err != nil || len(changes) != 1 || changes[0].State != ads.Staged {
+		t.Fatalf("staged changes = %#v, err = %v", changes, err)
+	}
+}
+
+func TestHarnessDoesNotTreatExplicitReadOnlyLanguageAsChangeIntent(t *testing.T) {
+	for _, message := range []string{
+		"Compare campaign performance; do not stage or apply changes.",
+		"Read only campaign analysis.",
+		"Diagnose delivery without changing anything.",
+		"Diagnose campaign campaign_prospect_us for the selected period. Identify observed funnel drivers and counter-evidence before recommending a change.",
+		"Why did the campaign budget change?",
+		"Should I increase the campaign budget?",
+		"Compare creative performance and recommend budget adjustments.",
+		"Show the campaign change history.",
+	} {
+		if changeRequested(message) {
+			t.Fatalf("read-only request treated as a change: %q", message)
+		}
+	}
+	if !changeRequested("Stage a campaign budget change, but do not apply it") {
+		t.Fatal("explicit stage-only request was suppressed")
+	}
+}
+
+func TestDiagnosisDoesNotAddMutationFollowThrough(t *testing.T) {
+	runs := 0
+	model := fakeRuntime(func(_ context.Context, request ar.Request, _ ar.Hooks) (ar.Result, error) {
+		runs++
+		if request.MaxRounds != 0 {
+			t.Fatal("main runtime acquired a turn ceiling")
+		}
+		return ar.Result{Stop: "stop", Text: "Inspect evidence before recommending a change."}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "diagnosis-reminder", "Diagnose campaign campaign_prospect_us for the selected period. Identify observed funnel drivers and counter-evidence before recommending a change.", nil)
+	if err != nil || runs != 1 {
+		t.Fatalf("diagnosis runs=%d err=%v", runs, err)
+	}
+	events, err := host.Store.Events(context.Background(), result.TurnID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range events {
+		if strings.Contains(string(event.Data), "Checking requested change follow-through") {
+			t.Fatal("advisory diagnosis triggered a mutation reminder")
+		}
+	}
+}
+
+func TestHarnessEnrichesDigestAndClosesOnlyTerminalPresentation(t *testing.T) {
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		if result := hooks.Execute(ctx, call("get_entity", `{"level":"campaign","id":"campaign_prospect_us"}`)); !result.OK {
+			t.Fatal(result.Error)
+		}
+		digest := hooks.Execute(ctx, call("present_digest", `{"title":"Today","items":[{"kind":"delivery","headline":"Delivery needs investigation","why":"The selected report lacks a complete day; it cannot establish a trend.","ref_id":"campaign_prospect_us","action":"Check campaign eligibility before proposing a budget change."}]}`))
+		if !digest.OK || hooks.CloseAfter(call("present_digest", `{}`), digest) {
+			t.Fatalf("digest must render but keep the turn open: %#v", digest)
+		}
+		bad := hooks.Execute(ctx, call("present_digest", `{"title":"Bad","items":[{"kind":"warning","headline":"Ungrounded","why":"Missing object.","action":"Check the object.","ref_id":"campaign_unknown"}]}`))
+		if bad.OK || !strings.HasPrefix(bad.Error, "digest_reference_not_grounded:") {
+			t.Fatalf("ungrounded digest accepted: %#v", bad)
+		}
+		suggestions := hooks.Execute(ctx, call("present_suggestions", `{"suggestions":["Review campaign"]}`))
+		if !suggestions.OK || !hooks.CloseAfter(call("present_suggestions", `{}`), suggestions) {
+			t.Fatalf("suggestions must close the presentation sequence: %#v", suggestions)
+		}
+		return ar.Result{Stop: "stop", Text: "done"}, nil
+	})
+	host, _ := testHost(t, model)
+	result, err := host.Run(context.Background(), "digest-test", "Give me a briefing", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Cards) != 2 || result.Cards[0].Digest == nil || result.Cards[0].Digest.Items[0].Entity == nil {
+		t.Fatalf("digest was not server-enriched: %#v", result.Cards)
+	}
+}
+
+func TestAutomaticMemoryExtractionUsesIsolatedFilteredTool(t *testing.T) {
+	extractions := 0
+	model := fakeRuntime(func(ctx context.Context, request ar.Request, hooks ar.Hooks) (ar.Result, error) {
+		if request.System != memoryExtractionSystem {
+			return ar.Result{Stop: "stop", Text: "Understood."}, nil
+		}
+		extractions++
+		if len(request.Tools) != 1 || request.Tools[0].Name != "record_memory_fact" || strings.Contains(request.Prompt, "campaign_example") {
+			t.Fatalf("memory authority or transcript leak: %#v", request)
+		}
+		text := "Keep each budget change at or below 10%"
+		if extractions == 2 {
+			text = "Keep each budget change at or below 8%"
+		}
+		arguments, _ := json.Marshal(map[string]string{"key": "budget_guardrail", "kind": "constraint", "text": text})
+		result := hooks.Execute(ctx, ar.Call{ID: "memory-call", Name: "record_memory_fact", Arguments: arguments, Round: 1})
+		if !result.OK {
+			t.Fatal(result.Error)
+		}
+		return ar.Result{Stop: "stop", Text: ""}, nil
+	})
+	host, _ := testHost(t, model)
+	host.AutomaticMemoryCapture = true
+	if !host.PublicHarness().AutomaticMemoryCapture {
+		t.Fatal("automatic memory capability not projected")
+	}
+	for _, message := range []string{
+		"I want every budget adjustment kept at or below 10%.",
+		"Update that standing limit to 8%.",
+	} {
+		if _, err := host.Run(context.Background(), "auto-memory", message, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	account, _ := host.Backend.Account(context.Background())
+	memories, err := host.Store.Memories(context.Background(), account.Source, 50)
+	if err != nil || len(memories) != 1 || memories[0].Key != "budget_guardrail" || !strings.Contains(memories[0].Text, "8%") {
+		t.Fatalf("extracted memories = %#v, err = %v", memories, err)
+	}
+}
+
+func TestSystemPromptUsesStableKernelScopeCapabilitiesAndSkillIndex(t *testing.T) {
+	host, _ := testHost(t, fakeRuntime(func(_ context.Context, _ ar.Request, _ ar.Hooks) (ar.Result, error) {
+		return ar.Result{Stop: "stop"}, nil
+	}))
+	for _, want := range []string{
+		"# Ad Agent",
+		"# Advertiser workspace",
+		"Cards are already visible product results, not work to announce.",
+		"never screen position.",
+		"Do not claim a card exists when its presentation failed.",
+		"## Deployment capabilities",
+		"Entity creation is unavailable",
+		"`account-operations`",
+	} {
+		if !strings.Contains(host.system, want) {
+			t.Fatalf("compiled system missing %q", want)
+		}
+	}
+	if strings.Contains(host.system, "# Account operations") || strings.Contains(host.system, "## Establish the operating frame") {
+		t.Fatal("skill body was preloaded into the stable system prompt")
+	}
+	for _, unwanted := range []string{"# Advertiser scope", "# Manager scope"} {
+		if strings.Contains(host.system, unwanted) {
+			t.Fatalf("compiled system contains implementation-facing copy %q", unwanted)
+		}
+	}
+	if words := len(strings.Fields(host.system)); words > prompting.MaxSystemWords {
+		t.Fatalf("stable system prompt has %d words, want at most %d", words, prompting.MaxSystemWords)
+	}
+}
