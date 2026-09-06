@@ -8,31 +8,41 @@ advertising assistant. The repository, CLI, and underlying agent project remain 
 
 **Alpha · Single operator · Go + React · MIT source license**
 
+[CI](https://github.com/z-chenhao/ad-agent/actions/workflows/ci.yml) ·
+[Contribute](CONTRIBUTING.md) · [Roadmap](docs/roadmap.md)
+
 Use one Advertiser workspace or manage several authorized accounts in Manager scope.
 Explore the persistent Sandbox without TikTok credentials. Connect TikTok Marketing API
 when your app and account authorization are ready. Choose Built-in Runtime, Pi, Codex App Server, or Claude Agent
 SDK independently of the advertising backend.
 
-## Product tour
+## See Ad Desk in action
 
-[![Watch the Ad Desk product tour](docs/product-tour.png)](docs/product-tour.mp4)
+[![Watch the Ad Desk product film](docs/product-film.png)](docs/product-film.mp4)
 
-[Watch the 2-minute tour](docs/product-tour.mp4) · 4K · English captions
+[Watch the 2-minute film](docs/product-film.mp4) · 4K · English narration and captions
 
-Follow the cursor through account health, campaigns, creative assets, an actual saved
-Pi + Luna analysis, settings and Sandbox time controls. The analysis is a replay of a
-completed read-only session, not a new live generation. No ads are changed in the video.
-[Chapters and recording notes](docs/product-tour.md)
+From “what changed?” to an informed next step: explore campaigns, creative assets,
+inspectable Agent findings and your approval boundary. Real application footage; the
+Agent analysis is a saved read-only session replay, not a new live generation.
+[Transcript and credits](docs/product-film.md) · [Detailed product tour](docs/product-tour.md)
 
 ## Start locally
 
 Requires Go 1.26.8+ and Node.js 24.14+.
+Linux is exercised in CI; macOS is used for local acceptance. Windows is not yet validated.
 
 ```sh
+git clone https://github.com/z-chenhao/ad-agent.git
+cd ad-agent
 npm ci --ignore-scripts
-make build
+make smoke
 ./bin/ad-agent serve --addr 127.0.0.1:8090 --data-dir .data/local
 ```
+
+`make smoke` builds the application and checks fresh Sandbox reports, restart persistence,
+and deterministic harness events in temporary state. It needs no model or TikTok login,
+does not send chat requests, and leaves existing workspaces untouched.
 
 Open **http://127.0.0.1:8090** and sign in with the private `operator-key` file at the
 path printed by the server. Keep the listener on loopback and do not share that key.
@@ -116,6 +126,13 @@ acceptance are required before enabling them. Local tests are not live-platform 
 [Skill governance](docs/skills.md)
 
 ## Develop and diagnose
+
+For agent application builders, this repository is a working example of application-owned
+tool authority, runtime-independent conversations, and approval/read-back boundaries.
+For advertising-tool contributors, Sandbox provides reproducible state without an ad account.
+These are inspectable implementations, not a stable SDK or evidence of production adoption.
+Start with a [small contribution](CONTRIBUTING.md#good-first-contributions) or the
+[maintainer workflow](docs/maintaining.md).
 
 ```sh
 make test

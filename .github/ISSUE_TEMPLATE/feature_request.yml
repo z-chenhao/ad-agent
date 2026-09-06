@@ -1,0 +1,24 @@
+name: Capability or improvement
+description: Describe a concrete user need and a bounded change.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: User need
+      description: Who needs this, what task is blocked, and what is the current workaround?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Smallest useful change
+      description: Include affected scope/runtime/backend, alternatives, and what should remain out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence and acceptance
+      description: Official platform documentation if relevant, observable behavior and proposed tests. No confidential account information.
+    validations:
+      required: true

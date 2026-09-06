@@ -49,6 +49,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: make build
+      - name: Credential-free source-install smoke test
+        run: node scripts/smoke.mjs
       - run: npm exec --workspace=@ad-agent/web -- playwright install --with-deps chromium
       - run: npm run test:e2e --workspace=@ad-agent/web
       - run: npm run test:e2e:manager --workspace=@ad-agent/web

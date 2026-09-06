@@ -2,6 +2,9 @@
 
 [Watch the video](product-tour.mp4)
 
+For a narrated introduction with opening and closing titles, see the
+[product film](product-film.md). This detailed, captioned walkthrough remains available.
+
 A two-minute, 3840 × 2160 walkthrough with English captions, a visible cursor, click
 indicators and focused camera moves. The footage comes from the running application,
 not a UI mockup. Captions are editorial annotations outside the application viewport.

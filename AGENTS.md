@@ -118,6 +118,11 @@ volatile account evidence in per-turn context. Do not duplicate a rule across al
   keep seeded replay deterministic, and keep hidden simulator truth out of business tools.
 - Use component names in architecture diagrams. Keep editable Excalidraw and rendered PNG
   synchronized; inspect the rendering for overlap and incorrect authority arrows.
+- Refresh or remake the promotional video only for a major product release, not for
+  routine feature, patch, UI or documentation releases. Keep dated footage and its
+  recording boundary documented instead of continuously re-recording. If a safety,
+  privacy, licensing or materially misleading claim requires correction, flag it to
+  the owner and prefer a narrow correction or withdrawal over a full remake.
 
 ## Verification and handoff
 

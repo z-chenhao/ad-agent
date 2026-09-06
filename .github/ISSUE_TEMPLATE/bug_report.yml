@@ -1,0 +1,46 @@
+name: Bug report
+description: Report reproducible product, runtime, or Sandbox behavior.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not post keys, advertiser data, state.db, native transcripts, or raw logs.
+        For security vulnerabilities, follow SECURITY.md instead of this public form.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Commit/version, OS, Go/Node, runtime/model (no keys), AdBackend and scope.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Steps or commands using fictional Sandbox data when possible. Include selected dates and virtual time.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Include terminal outcome, not just whether HTTP returned 200. State whether a change was sent or remains unknown; do not retry an unknown write.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Evidence boundary
+      options:
+        - Local Sandbox / deterministic runtime
+        - HTTP fake
+        - Live model with local Sandbox
+        - TikTok platform Sandbox
+        - Controlled live TikTok account
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics (optional)
+      description: Time, request/turn ID, safe error code, failing test and a minimal fictional-data screenshot. No private transcripts or log bundles.

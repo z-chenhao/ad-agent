@@ -1,10 +1,12 @@
-.PHONY: cli build test test-sandbox test-web test-web-manager
+.PHONY: cli build smoke test test-sandbox test-web test-web-manager
 cli:
 	npm run build --workspaces --if-present
 	go build -o bin/ad-agent ./cmd/ad-agent
 build:
 	npm run build
 	go build -o bin/ad-agent ./cmd/ad-agent
+smoke: build
+	node scripts/smoke.mjs
 test:
 	./scripts/check-english.sh
 	go test -race ./...

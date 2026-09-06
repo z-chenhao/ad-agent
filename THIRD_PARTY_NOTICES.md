@@ -6,6 +6,11 @@ relicense dependencies, brands, provider services, or bundled demonstration medi
 - Sandbox photos/videos retain the Pexels license and creator credits in
   [media attribution](web/public/sandbox/creatives/ATTRIBUTION.md). Keep that file with
   redistributed media. The fictional advertiser does not imply creator endorsement.
+- The [product film](docs/product-film.md) uses an edited excerpt of “Meanwhile” by
+  Scott Buckley under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  Keep its linked composer, source and modification credits with the video; the music
+  is not relicensed as MIT. English narration is synthesized locally with the
+  Apache-2.0 Kokoro v1.0 model and MIT kokoro-onnx tooling, not a human endorsement.
 - Pi packages are separately MIT-licensed. OpenAI Codex is separately Apache-2.0-licensed.
   Preserve their upstream license/notice files when distributing them.
 - Built-in Runtime uses the separately Apache-2.0-licensed

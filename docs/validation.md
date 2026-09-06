@@ -9,6 +9,7 @@ Requires the Go and Node versions documented in the README. From a clean source 
 
 ```sh
 npm ci --ignore-scripts
+make smoke
 make test
 go vet ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
@@ -26,6 +27,13 @@ Explicit test entrypoints fail on missing builds instead of accepting empty glob
 Browser failure uploads contain test screenshots, never operator state or credentials.
 Ordinary tests use isolated local Sandbox state and HTTP fakes, not model credentials.
 Do not run concurrent Playwright invocations into the same output directory.
+
+`make smoke` also runs in the browser CI job after the source build. It uses a new
+temporary Sandbox and a credential-free child environment to check campaign/report
+consistency, report provenance, restart persistence, an empty change ledger and the
+deterministic harness. It removes only its own temporary state. This is source-install
+acceptance, not browser or live-model acceptance. See [maintenance](maintaining.md) for
+review and evidence handling.
 
 ### Alpha release review — 2026-09-05
 

@@ -1,0 +1,115 @@
+1
+00:00:00,450 --> 00:00:02,166
+You've opened your ad reports.
+
+2
+00:00:02,166 --> 00:00:03,310
+Something's changed.
+
+3
+00:00:03,310 --> 00:00:04,397
+Where do you start?
+
+4
+00:00:06,970 --> 00:00:07,867
+Meet Ad Desk.
+
+5
+00:00:07,867 --> 00:00:11,663
+Your advertising workspace, with Ad Agent by your side.
+
+6
+00:00:14,490 --> 00:00:16,094
+Let's start with the account.
+
+7
+00:00:16,094 --> 00:00:18,970
+See what's moving, then decide where to look closer.
+
+8
+00:00:23,690 --> 00:00:24,640
+Open a campaign.
+
+9
+00:00:24,640 --> 00:00:30,282
+Compare the dates that matter, check a point on the chart, and look at the ad groups behind it.
+
+10
+00:00:37,090 --> 00:00:39,056
+Then look at the creative itself.
+
+11
+00:00:39,056 --> 00:00:43,405
+The video, the copy, and the performance belong in the same conversation.
+
+12
+00:00:47,810 --> 00:00:50,177
+Ask Ad Agent about what you're looking at.
+
+13
+00:00:50,177 --> 00:00:53,783
+The account, campaign, and dates stay attached to your question.
+
+14
+00:00:56,330 --> 00:00:59,173
+Here, we're replaying a real saved analysis.
+
+15
+00:00:59,173 --> 00:01:03,050
+Read the evidence, the finding, and the suggested next step.
+
+16
+00:01:04,850 --> 00:01:06,072
+Want to look closer?
+
+17
+00:01:06,072 --> 00:01:07,477
+Open the tool activity.
+
+18
+00:01:07,477 --> 00:01:11,997
+You can inspect what the agent checked, instead of only seeing its answer.
+
+19
+00:01:15,050 --> 00:01:19,023
+And when it's time to act, changes need your explicit approval.
+
+20
+00:01:19,023 --> 00:01:20,789
+This session changed no ads.
+
+21
+00:01:22,450 --> 00:01:27,162
+Connect through ChatGPT OAuth, or bring a supported provider connection.
+
+22
+00:01:27,162 --> 00:01:29,191
+You're not locked to one setup.
+
+23
+00:01:31,290 --> 00:01:33,301
+Choose the runtime separately.
+
+24
+00:01:33,301 --> 00:01:38,394
+Built-in, Pi, Codex, or Claude, within each adapter's supported connections.
+
+25
+00:01:39,890 --> 00:01:41,842
+Start in the local Sandbox.
+
+26
+00:01:41,842 --> 00:01:45,384
+Explore simulated delivery without an ad account.
+
+27
+00:01:45,384 --> 00:01:48,637
+Live TikTok access still needs authorization.
+
+28
+00:01:49,770 --> 00:01:51,943
+That's Ad Desk, powered by Ad Agent.
+
+29
+00:01:51,943 --> 00:01:57,194
+Try the local Sandbox, explore the source, and tell us what would make your day easier.
