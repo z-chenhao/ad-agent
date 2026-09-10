@@ -54,7 +54,7 @@ jobs:
       - run: npm exec --workspace=@ad-agent/web -- playwright install --with-deps chromium
       - run: npm run test:e2e --workspace=@ad-agent/web
       - run: npm run test:e2e:manager --workspace=@ad-agent/web
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-diagnostics
