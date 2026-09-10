@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@earendil-works/pi-ai": "0.84.4",
-    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-coding-agent": "0.85.1",
     "undici": "8.9.0"
   },
   "devDependencies": {
